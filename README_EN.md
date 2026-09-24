@@ -62,6 +62,17 @@ npm run typecheck
 npm test
 ```
 
+Run real browser E2E tests (first start, world action, save/restart,
+rest phase, multi-instance comparison):
+
+```sh
+npm run test:e2e
+```
+
+Downloads Playwright's own Chromium if none is present yet. If that
+is not possible in your environment, an already installed Chromium can
+be used via `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium npm run test:e2e`.
+
 ## License
 
 [PolyForm Noncommercial License 1.0.0](LICENSE).

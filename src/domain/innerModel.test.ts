@@ -63,6 +63,15 @@ describe("Verbindungen", () => {
   });
 });
 
+describe("Unbegrenzter Innenraum", () => {
+  it("akzeptiert beliebig große und negative Positionen ohne künstliche Würfel-/Randbegrenzung", () => {
+    let state = createEmptyModel();
+    state = createNode(state, { id: "weit-weg", at: 0, position: { x: 1_000_000, y: -1_000_000, z: 999_999 } });
+    state = moveNode(state, "weit-weg", 1, { x: -5_000_000, y: 5_000_000, z: -5_000_000 });
+    expect(state.nodes.get("weit-weg")?.position).toEqual({ x: -5_000_000, y: 5_000_000, z: -5_000_000 });
+  });
+});
+
 describe("Erreichbarkeit", () => {
   it("sinkt mit Distanz, wird aber nie 0", () => {
     let state = seedTwoNodes();
