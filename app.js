@@ -15,6 +15,7 @@ import {
   deserializeRun,
   ensureEdge,
   replaySequence,
+  runRestStep,
   seedInitialRoom,
   serializeRun,
   toUiPayload,
@@ -115,8 +116,50 @@ render();
  * Browser zu verifizieren — zwei Instanzen aus dem aktuellen Zustand,
  * dieselbe Ereignisfolge abgespielt, Ergebnis verglichen.
  */
+/**
+ * Ruhephase (Bauplan Phase 8): noch ohne UI-Auslöser (kein UI-Feature
+ * erfunden). Erlaubt der Testschnittstelle, den bereits getesteten
+ * Ruheschritt (experimentEngine.runRestStep) im echten Browser mit
+ * klarer Ereignisgrenze beim Wechsel zu prüfen.
+ */
+function setRestActive(active) {
+  run.restActive = active;
+  eventCounter += 1;
+  const eventId = `ev${eventCounter}`;
+  const at = Date.now();
+  const { log } = appendEvent(run.log, {
+    id: eventId,
+    time: at,
+    participants: [],
+    payload: { label: active ? "Ruhephase begonnen" : "Ruhephase beendet" },
+  });
+  run.log = log;
+  saveRunToStorage(run);
+  render();
+}
+
 window.KieselWesenDebug = Object.freeze({
   getRun: () => run,
+  enterRest: () => setRestActive(true),
+  exitRest: () => setRestActive(false),
+  runRestStep: () => {
+    if (!run.restActive) return { applied: false, reason: "not in rest phase" };
+    const at = Date.now();
+    const result = runRestStep(run.model, run.engineConfig, at);
+    run.model = result.state;
+    eventCounter += 1;
+    const eventId = `ev${eventCounter}`;
+    const { log } = appendEvent(run.log, {
+      id: eventId,
+      time: at,
+      participants: [],
+      payload: { label: `Ruheschritt: ${result.changes.length} Änderung(en)` },
+    });
+    run.log = log;
+    saveRunToStorage(run);
+    render();
+    return { applied: true, changeCount: result.changes.length };
+  },
   compareIdenticalReplay: (actions) => {
     const [instanceA, instanceB] = createInstances(run, ["debug-a", "debug-b"], Date.now());
     const finalA = replaySequence(instanceA, actions, 1);
