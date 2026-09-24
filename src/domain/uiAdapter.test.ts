@@ -63,6 +63,14 @@ describe("toUiPayload", () => {
     expect(payload.status).toBe("aktiv");
   });
 
+  it("liefert echte unnormierte 3D-Positionen für die 3D-Ansicht", () => {
+    const payload = toUiPayload(seedRun());
+    const n1 = payload.nodes.find((n) => n.id === "n1");
+    const n2 = payload.nodes.find((n) => n.id === "n2");
+    expect(n1?.position3d).toEqual({ x: 0, y: 0, z: 0 });
+    expect(n2?.position3d).toEqual({ x: 10, y: 4, z: 0 });
+  });
+
   it("normiert Knotenaktivierung getrennt von Kantenstärke", () => {
     let model = createEmptyModel();
     model = createNode(model, { id: "n1", at: 0, position: { x: 0, y: 0, z: 0 }, activation: 0.4 });
