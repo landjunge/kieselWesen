@@ -130,7 +130,9 @@ describe("E2E — Erststart bis Weltaktion", () => {
     await page.waitForTimeout(150);
     const eventText = await page.locator("#current-event").textContent();
     expect(eventText).toBe("Pflanze berührt");
-    const nodeCount = await page.locator("#graph-stage svg circle.graph-node").count();
+    const canvasCount = await page.locator("#graph-stage canvas").count();
+    expect(canvasCount).toBe(1);
+    const nodeCount = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.nodeCount ?? 0);
     expect(nodeCount).toBeGreaterThan(0);
     await page.context().close();
   });
@@ -156,13 +158,13 @@ describe("E2E — Speichern und Neustart", () => {
     await page.click(".cat");
     await page.waitForTimeout(150);
     const eventBefore = await page.textContent("#current-event");
-    const nodeCountBefore = await page.locator("#graph-stage svg circle.graph-node").count();
+    const nodeCountBefore = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.nodeCount ?? 0);
 
     await page.reload();
     await page.waitForTimeout(250);
 
     const eventAfter = await page.textContent("#current-event");
-    const nodeCountAfter = await page.locator("#graph-stage svg circle.graph-node").count();
+    const nodeCountAfter = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.nodeCount ?? 0);
     expect(eventAfter).toBe(eventBefore);
     expect(nodeCountAfter).toBe(nodeCountBefore);
     await page.context().close();
@@ -229,9 +231,7 @@ describe("E2E — Graph unterscheidet Distanz, Nutzung und Aktivierung visuell",
     await page.click(".cat");
     await page.waitForTimeout(150);
 
-    const radii = await page.locator("#graph-stage svg circle.graph-node").evaluateAll((els) =>
-      els.map((el) => Number(el.getAttribute("r"))),
-    );
+    const radii = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.radii ?? []);
     expect(radii.length).toBeGreaterThanOrEqual(2);
     const distinctRadii = new Set(radii);
     expect(distinctRadii.size).toBeGreaterThan(1);

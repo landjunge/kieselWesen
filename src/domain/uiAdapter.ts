@@ -12,7 +12,15 @@ export interface UiPayload {
   status: string;
   event: string;
   state: Record<string, string>;
-  nodes: { id: string; label: string; x: number; y: number; activation: number }[];
+  nodes: {
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    activation: number;
+    /** Echte, unnormierte Position aus dem unbegrenzten inneren Raum — für die 3D-Ansicht, damit Straßenlängen der tatsächlichen geometrischen Entfernung entsprechen. */
+    position3d: { x: number; y: number; z: number };
+  }[];
   edges: { source: string; target: string; weight: number }[];
   history: { label: string }[];
   position?: { x: number; y: number };
@@ -103,6 +111,7 @@ export function toUiPayload(run: RunState, world?: WorldState, kieselWesenObject
       label: node.id,
       ...(positions.get(node.id) ?? { x: 0.5, y: 0.5 }),
       activation: activations.get(node.id) ?? 0,
+      position3d: { x: node.position.x, y: node.position.y, z: node.position.z },
     })),
     edges: edges.map((edge) => ({
       source: edge.nodeA,

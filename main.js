@@ -39,52 +39,31 @@ for (const object of document.querySelectorAll('.room-object')) {
 
 // The simulation sends observed values here. No values are fabricated by the UI.
 // window.KieselWesenUI.update({status, event, state, nodes, edges, history, position})
-// nodes: [{id, label, x, y}], x/y in [0, 1]; edges: [{source, target, weight}]
-// position: {x, y}, integer room coordinates in [0, 63].
-const svgNS = 'http://www.w3.org/2000/svg';
-const svgElement = (name, attributes) => {
-  const element = document.createElementNS(svgNS, name);
-  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
-  return element;
-};
-const clamp = value => Math.max(0, Math.min(1, Number(value) || 0));
+// nodes: [{id, label, x, y, activation, position3d:{x,y,z}}], x/y in [0,1] (2D-Hilfswerte);
+// position3d: echte unnormierte Koordinaten aus dem unbegrenzten inneren Raum, für die
+// 3D-Ansicht. edges: [{source, target, weight}]; position: {x, y}, integer room coords [0, 63].
+let graph3dView = null;
 function renderGraph(nodes, edges) {
   const stage = document.getElementById('graph-stage');
-  stage.replaceChildren();
-  if (!Array.isArray(nodes) || !nodes.length) {
+  const hasNodes = Array.isArray(nodes) && nodes.length > 0;
+  if (!hasNodes) {
+    graph3dView?.dispose();
+    graph3dView = null;
+    stage.replaceChildren();
     const message = document.createElement('p');
     message.textContent = 'Noch keine Knotendaten.';
     stage.append(message);
     return;
   }
-  const svg = svgElement('svg', {viewBox:'0 0 360 300', role:'img', 'aria-label':`Graph mit ${nodes.length} Knoten`});
-  const byId = new Map(nodes.map(node => [String(node.id), node]));
-  for (const edge of Array.isArray(edges) ? edges : []) {
-    const from = byId.get(String(edge.source));
-    const to = byId.get(String(edge.target));
-    if (!from || !to) continue;
-    svg.append(svgElement('line', {x1:25+clamp(from.x)*310, y1:25+clamp(from.y)*250, x2:25+clamp(to.x)*310, y2:25+clamp(to.y)*250, class:'graph-edge', 'stroke-width':1+clamp(edge.weight)*3}));
+  if (!graph3dView) {
+    stage.replaceChildren();
+    graph3dView = window.KieselWesenGraph3D.createGraph3DView(stage);
   }
-  for (const node of nodes) {
-    const group = svgElement('g', {});
-    const x = 25+clamp(node.x)*310;
-    const y = 25+clamp(node.y)*250;
-    // Aktivierung ist ein eigener sichtbarer Kanal (Knotengröße), getrennt
-    // von Kantenstärke (Liniendicke oben) und Distanz (Position im Graph).
-    const activation = clamp(node.activation);
-    const radius = 6 + activation * 9;
-    const circle = svgElement('circle', {cx:x, cy:y, r:radius, class:'graph-node'});
-    circle.style.fillOpacity = String(0.45 + activation * 0.55);
-    const title = svgElement('title', {});
-    title.textContent = `Aktivierung: ${(activation * 100).toFixed(0)} %`;
-    circle.append(title);
-    group.append(circle);
-    const label = svgElement('text', {x, y:y-15-activation*9, 'text-anchor':'middle', class:'graph-label'});
-    label.textContent = String(node.label ?? node.id ?? '');
-    group.append(label);
-    svg.append(group);
-  }
-  stage.append(svg);
+  graph3dView.render(nodes, edges);
+  // Testschnittstelle (kein UI-Feature): erlaubt automatisierten Tests zu
+  // prüfen, dass Aktivierung sich tatsächlich in unterschiedlicher
+  // Knotengröße niederschlägt, ohne in die WebGL-Szene hineinzusehen.
+  window.__kieselwesenGraph3DDebug = { nodeCount: nodes.length, radii: graph3dView.getLastNodeRadii() };
 }
 function renderHistory(history) {
   const list = document.getElementById('history-list');
