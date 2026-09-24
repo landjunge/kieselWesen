@@ -5,3 +5,4 @@ export * from "./experimentEngine.js";
 export * from "./worldObjects.js";
 export * from "./uiAdapter.js";
 export * from "./persistence.js";
+export * from "./compare.js";
