@@ -36,9 +36,18 @@ dieses Repos und wird hier nicht fortgeführt.
 
 ## Stand & Start
 
-Das Projekt befindet sich aktuell in der Repo-Grundlagenphase. Ein
-App-Gerüst und ein dokumentierter lokaler Startbefehl folgen mit der
-nächsten Bauphase.
+Aktuell existiert der Code-Unterbau: Ereigniskern (append-only Eventlog)
+und inneres Datenmodell (Knoten, Verbindungen, Distanz/Nutzung/Aktivierung
+getrennt) unter `src/domain/`. Das UI/Design wird separat entwickelt und
+ist hier noch nicht eingebunden.
+
+Entwicklertests lokal ausführen:
+
+```sh
+npm install
+npm run typecheck
+npm test
+```
 
 ## Lizenz
 
