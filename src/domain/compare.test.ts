@@ -9,7 +9,7 @@ import {
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { createEmptyLog } from "./eventLog.js";
 import { createEmptyModel } from "./innerModel.js";
-import type { RunState } from "./persistence.js";
+import type { RunState } from "./runSerialization.js";
 
 function seedRun(runId: string): RunState {
   return {

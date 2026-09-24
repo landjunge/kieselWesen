@@ -6,14 +6,13 @@ import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { createEmptyLog } from "./eventLog.js";
 import { createEmptyModel, createNode, ensureEdge } from "./innerModel.js";
 import {
-  branchFromSnapshot,
   createSnapshot,
   listRunIds,
   loadRun,
   loadSnapshot,
   saveRun,
-  type RunState,
 } from "./persistence.js";
+import { branchFromSnapshot, type RunState } from "./runSerialization.js";
 
 function seedRun(runId: string): RunState {
   let model = createEmptyModel();

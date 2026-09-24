@@ -6,12 +6,17 @@ import {
   appendEvent,
   applyEventToPair,
   applyEventToSingleNode,
+  compareRuns,
   createEmptyLog,
   createEmptyModel,
+  createInstances,
   createNode,
   demoEngineParams,
+  deserializeRun,
   ensureEdge,
+  replaySequence,
   seedInitialRoom,
+  serializeRun,
   toUiPayload,
 } from "./dist-browser/domain/browser.js";
 
@@ -24,8 +29,29 @@ const OBJECT_ID_BY_CLASS = {
   kiesel: "kieselwesen",
 };
 
+const STORAGE_KEY = "kieselwesen:lokal-vorschau";
+
+function loadRunFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return deserializeRun(JSON.parse(raw));
+  } catch {
+    // Privater Modus, defekte Daten o.ä. — startet dann einfach frisch.
+    return null;
+  }
+}
+
+function saveRunToStorage(currentRun) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeRun(currentRun)));
+  } catch {
+    // Speicher voll/blockiert — Zustand bleibt dann nur für diese Sitzung erhalten.
+  }
+}
+
 let world = seedInitialRoom();
-let run = {
+let run = loadRunFromStorage() ?? {
   runId: "lokal-vorschau",
   seed: "lokal",
   createdAt: Date.now(),
@@ -34,8 +60,8 @@ let run = {
   log: createEmptyLog(),
   engineConfig: { params: demoEngineParams, rulesEnabled: allRulesEnabled },
 };
-let eventCounter = 0;
-let lastTouchedNodeId = null;
+let eventCounter = run.log.events.length;
+let lastTouchedNodeId = run.log.events.at(-1)?.participants.at(-1) ?? null;
 
 function render() {
   window.KieselWesenUI.update(toUiPayload(run, world));
@@ -71,6 +97,7 @@ function touchObject(objectId, label) {
   }
   lastTouchedNodeId = objectId;
 
+  saveRunToStorage(run);
   render();
 }
 
@@ -81,3 +108,25 @@ for (const element of document.querySelectorAll(".room-object")) {
 }
 
 render();
+
+/**
+ * Testschnittstelle für automatisierte Prüfungen (kein UI-Feature):
+ * erlaubt, den Mehrfach-Kiesel-Vergleich (Phase 10) auch im echten
+ * Browser zu verifizieren — zwei Instanzen aus dem aktuellen Zustand,
+ * dieselbe Ereignisfolge abgespielt, Ergebnis verglichen.
+ */
+window.KieselWesenDebug = Object.freeze({
+  getRun: () => run,
+  compareIdenticalReplay: (actions) => {
+    const [instanceA, instanceB] = createInstances(run, ["debug-a", "debug-b"], Date.now());
+    const finalA = replaySequence(instanceA, actions, 1);
+    const finalB = replaySequence(instanceB, actions, 1);
+    return compareRuns(finalA, finalB);
+  },
+  compareDeviatedReplay: (actionsA, actionsB) => {
+    const [instanceA, instanceB] = createInstances(run, ["debug-a2", "debug-b2"], Date.now());
+    const finalA = replaySequence(instanceA, actionsA, 1);
+    const finalB = replaySequence(instanceB, actionsB, 1);
+    return compareRuns(finalA, finalB);
+  },
+});
