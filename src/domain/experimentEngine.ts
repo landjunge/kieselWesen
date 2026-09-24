@@ -63,6 +63,29 @@ export interface EngineRunResult {
 }
 
 /**
+ * Verarbeitet die Wirkung eines einzelnen Ereignisses auf genau einen
+ * beteiligten Knoten (z.B. ein einzelnes berührtes Weltobjekt ohne
+ * Gegenstück). Nur Aktivierung, keine Kante.
+ */
+export function applyEventToSingleNode(
+  state: InnerModelState,
+  config: EngineConfig,
+  at: number,
+  eventId: string,
+  nodeId: string,
+): EngineRunResult {
+  if (!config.rulesEnabled.activationOnUse) return { state, changes: [] };
+  const node = state.nodes.get(nodeId);
+  if (!node) return { state, changes: [] };
+  const activation = node.activation + config.params.activationBoostOnUse;
+  const next = setActivation(state, nodeId, at, activation);
+  return {
+    state: next,
+    changes: [{ at, rule: "activationOnUse", targetKind: "node", targetId: nodeId, eventId }],
+  };
+}
+
+/**
  * Verarbeitet die Wirkung eines einzelnen Ereignisses auf zwei beteiligte
  * Knoten: Aktivierung und Kantenstärke steigen nur, wenn die jeweilige
  * Regel aktiv ist. Jede Änderung wird mit der auslösenden Event-ID

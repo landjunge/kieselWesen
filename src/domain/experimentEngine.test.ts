@@ -3,6 +3,7 @@ import { createEmptyModel, createNode, ensureEdge } from "./innerModel.js";
 import {
   allRulesEnabled,
   applyEventToPair,
+  applyEventToSingleNode,
   demoEngineParams,
   runRestStep,
   type EngineConfig,
@@ -17,6 +18,23 @@ function seedState() {
 }
 
 const config: EngineConfig = { params: demoEngineParams, rulesEnabled: allRulesEnabled };
+
+describe("Versuchsmotor — Einzelknoten-Ereignis", () => {
+  it("erhöht nur die Aktivierung des berührten Knotens, keine Kante", () => {
+    const state = seedState();
+    const result = applyEventToSingleNode(state, config, 1, "ev1", "n1");
+    expect(result.state.nodes.get("n1")?.activation).toBeCloseTo(demoEngineParams.activationBoostOnUse);
+    expect(result.state.edges.get("n1::n2")?.strength).toBe(0);
+    expect(result.changes).toEqual([{ at: 1, rule: "activationOnUse", targetKind: "node", targetId: "n1", eventId: "ev1" }]);
+  });
+
+  it("wirkt nicht auf unbekannte Knoten oder bei ausgeschalteter Regel", () => {
+    const state = seedState();
+    expect(applyEventToSingleNode(state, config, 1, "ev1", "unbekannt").changes).toHaveLength(0);
+    const off: EngineConfig = { params: demoEngineParams, rulesEnabled: { ...allRulesEnabled, activationOnUse: false } };
+    expect(applyEventToSingleNode(state, off, 1, "ev1", "n1").changes).toHaveLength(0);
+  });
+});
 
 describe("Versuchsmotor — Ereigniswirkung", () => {
   it("erhöht Aktivierung und Kantenstärke, verknüpft Änderung mit Event-ID", () => {

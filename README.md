@@ -36,10 +36,25 @@ dieses Repos und wird hier nicht fortgeführt.
 
 ## Stand & Start
 
-Aktuell existiert der Code-Unterbau: Ereigniskern (append-only Eventlog)
-und inneres Datenmodell (Knoten, Verbindungen, Distanz/Nutzung/Aktivierung
-getrennt) unter `src/domain/`. Das UI/Design wird separat entwickelt und
-ist hier noch nicht eingebunden.
+Der Code-Unterbau (Ereigniskern, inneres Datenmodell, Versuchsmotor,
+Weltobjekte, Persistenz) liegt unter `src/domain/`. Die UI
+(`index.html`, `styles.css`, `main.js`) ist eigenständig entwickelt;
+`app.js` verbindet beide: Klicks auf Zimmerobjekte erzeugen echte
+Ereignisse, die über den Versuchsmotor in Knoten/Kanten münden und live
+im UI erscheinen — keine erfundenen Anzeigewerte.
+
+App lokal starten:
+
+```sh
+npm install
+npm run build:web   # bündelt src/domain für den Browser nach dist-browser/
+python3 -m http.server 8000   # oder ein beliebiger anderer statischer Server
+```
+
+Danach `http://localhost:8000/index.html` im Browser öffnen. Ein reines
+Öffnen der `index.html`-Datei per Doppelklick (`file://`) funktioniert
+wegen ES-Modul-Beschränkungen der Browser nicht — es braucht einen
+lokalen HTTP-Server.
 
 Entwicklertests lokal ausführen:
 
