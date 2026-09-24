@@ -3,6 +3,7 @@ export * from "./eventLog.js";
 export * from "./innerModel.js";
 export * from "./experimentEngine.js";
 export * from "./worldObjects.js";
+export * from "./runSerialization.js";
 export * from "./uiAdapter.js";
 export * from "./persistence.js";
 export * from "./compare.js";

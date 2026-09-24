@@ -1,4 +1,4 @@
-import type { RunState } from "./persistence.js";
+import type { RunState } from "./runSerialization.js";
 import type { Edge, InnerNode } from "./types.js";
 import type { WorldState } from "./worldObjects.js";
 

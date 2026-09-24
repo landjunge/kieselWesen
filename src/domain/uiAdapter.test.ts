@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { appendEvent, createEmptyLog } from "./eventLog.js";
 import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
-import type { RunState } from "./persistence.js";
+import type { RunState } from "./runSerialization.js";
 import { normalizeNodePositions, toUiPayload } from "./uiAdapter.js";
 import { seedInitialRoom } from "./worldObjects.js";
 

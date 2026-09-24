@@ -1,8 +1,7 @@
 import { appendEvent } from "./eventLog.js";
 import { applyEventToPair, applyEventToSingleNode } from "./experimentEngine.js";
 import { createNode, ensureEdge } from "./innerModel.js";
-import type { RunState } from "./persistence.js";
-import { branchFromSnapshot } from "./persistence.js";
+import { branchFromSnapshot, type RunState } from "./runSerialization.js";
 
 /**
  * Eine einzelne, deterministisch wiederholbare Interaktion: entweder ein
