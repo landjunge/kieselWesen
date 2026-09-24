@@ -35,6 +35,28 @@ export interface Graph3DView {
   dispose(): void;
   /** Für automatisierte Tests: Radien der zuletzt gerenderten Knoten. */
   getLastNodeRadii(): number[];
+  /** Für automatisierte Tests: Anzahl bisher freigegebener Geometrien/Materialien (WebGL-Ressourcen). */
+  getDisposedResourceCount(): number;
+}
+
+/**
+ * Gibt Geometrien und Materialien aller Meshes/Lines in einer Gruppe frei,
+ * bevor die Gruppe verworfen wird. three.js entfernt WebGL-Puffer nicht
+ * automatisch beim Herausnehmen aus der Szene — ohne diesen Schritt bleiben
+ * bei jedem Neuzeichnen ungenutzte GPU-Ressourcen liegen.
+ */
+function disposeGroupContents(group: THREE.Group, onDispose: () => void): void {
+  for (const child of group.children) {
+    if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+      child.geometry.dispose();
+      onDispose();
+      const material = child.material;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        m.dispose();
+        onDispose();
+      }
+    }
+  }
 }
 
 export function createGraph3DView(container: HTMLElement): Graph3DView {
@@ -88,9 +110,11 @@ export function createGraph3DView(container: HTMLElement): Graph3DView {
   renderer.domElement.addEventListener("pointermove", onPointerMove);
 
   let lastNodeRadii: number[] = [];
+  let disposedResourceCount = 0;
 
   function render(nodes: Graph3DNode[], edges: Graph3DEdge[]) {
     scene.remove(group);
+    disposeGroupContents(group, () => disposedResourceCount++);
     group = new THREE.Group();
     scene.add(group);
     hitTargets = [];
@@ -168,10 +192,16 @@ export function createGraph3DView(container: HTMLElement): Graph3DView {
     animating = false;
     resizeObserver.disconnect();
     renderer.domElement.removeEventListener("pointermove", onPointerMove);
+    disposeGroupContents(group, () => disposedResourceCount++);
     controls.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   }
 
-  return { render, dispose, getLastNodeRadii: () => lastNodeRadii };
+  return {
+    render,
+    dispose,
+    getLastNodeRadii: () => lastNodeRadii,
+    getDisposedResourceCount: () => disposedResourceCount,
+  };
 }

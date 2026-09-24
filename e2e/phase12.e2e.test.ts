@@ -61,6 +61,20 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
+/**
+ * Wartet auf den erwarteten Graph-Zustand statt auf eine feste Zeitspanne.
+ * Die 3D-Neuinitialisierung nach Reload/Ereignis kann je nach Rechner
+ * unterschiedlich lange dauern — eine feste Wartezeit wäre auf langsameren
+ * Maschinen sporadisch zu kurz.
+ */
+async function waitForNodeCount(page: import("playwright").Page, expectedCount: number) {
+  await page.waitForFunction(
+    (count) => window.__kieselwesenGraph3DDebug?.nodeCount === count,
+    expectedCount,
+    { timeout: 5_000 },
+  );
+}
+
 async function freshPage() {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   context = ctx;
@@ -161,7 +175,7 @@ describe("E2E — Speichern und Neustart", () => {
     const nodeCountBefore = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.nodeCount ?? 0);
 
     await page.reload();
-    await page.waitForTimeout(250);
+    await waitForNodeCount(page, nodeCountBefore);
 
     const eventAfter = await page.textContent("#current-event");
     const nodeCountAfter = await page.evaluate(() => window.__kieselwesenGraph3DDebug?.nodeCount ?? 0);
@@ -235,6 +249,27 @@ describe("E2E — Graph unterscheidet Distanz, Nutzung und Aktivierung visuell",
     expect(radii.length).toBeGreaterThanOrEqual(2);
     const distinctRadii = new Set(radii);
     expect(distinctRadii.size).toBeGreaterThan(1);
+    await page.context().close();
+  });
+});
+
+describe("E2E — Graph gibt WebGL-Ressourcen bei Neuzeichnen frei", () => {
+  it("wiederholtes Neuzeichnen häuft keine ungenutzten Geometrien/Materialien an", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await waitForNodeCount(page, 1);
+    await page.click(".cat");
+    await waitForNodeCount(page, 2);
+    await page.click(".kiesel");
+    await waitForNodeCount(page, 3);
+
+    const disposedResourceCount = await page.evaluate(
+      () => window.__kieselwesenGraph3DDebug?.disposedResourceCount ?? 0,
+    );
+    // Zwei Neuzeichnungen (nach "cat" und "kiesel") geben jeweils die Ressourcen
+    // der vorherigen Gruppe frei — mindestens 1 Geometrie + 1 Material für den
+    // ersten Knoten.
+    expect(disposedResourceCount).toBeGreaterThan(0);
     await page.context().close();
   });
 });
