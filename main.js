@@ -69,8 +69,17 @@ function renderGraph(nodes, edges) {
     const group = svgElement('g', {});
     const x = 25+clamp(node.x)*310;
     const y = 25+clamp(node.y)*250;
-    group.append(svgElement('circle', {cx:x, cy:y, r:8, class:'graph-node'}));
-    const label = svgElement('text', {x, y:y-15, 'text-anchor':'middle', class:'graph-label'});
+    // Aktivierung ist ein eigener sichtbarer Kanal (Knotengröße), getrennt
+    // von Kantenstärke (Liniendicke oben) und Distanz (Position im Graph).
+    const activation = clamp(node.activation);
+    const radius = 6 + activation * 9;
+    const circle = svgElement('circle', {cx:x, cy:y, r:radius, class:'graph-node'});
+    circle.style.fillOpacity = String(0.45 + activation * 0.55);
+    const title = svgElement('title', {});
+    title.textContent = `Aktivierung: ${(activation * 100).toFixed(0)} %`;
+    circle.append(title);
+    group.append(circle);
+    const label = svgElement('text', {x, y:y-15-activation*9, 'text-anchor':'middle', class:'graph-label'});
     label.textContent = String(node.label ?? node.id ?? '');
     group.append(label);
     svg.append(group);

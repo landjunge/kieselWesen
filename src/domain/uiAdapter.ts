@@ -12,7 +12,7 @@ export interface UiPayload {
   status: string;
   event: string;
   state: Record<string, string>;
-  nodes: { id: string; label: string; x: number; y: number }[];
+  nodes: { id: string; label: string; x: number; y: number; activation: number }[];
   edges: { source: string; target: string; weight: number }[];
   history: { label: string }[];
   position?: { x: number; y: number };
@@ -54,6 +54,22 @@ function normalizeEdgeWeights(edges: Edge[]): Map<string, number> {
   return result;
 }
 
+/**
+ * Normiert Knotenaktivierung auf [0, 1], relativ zur aktuell höchsten
+ * Aktivierung — analog zur Kantenstärke, aber als eigener Kanal, damit
+ * Distanz (Position), Nutzung/Stärke (Kantendicke) und Aktivierung
+ * (Knotengröße/-helligkeit) sichtbar getrennt bleiben.
+ */
+function normalizeNodeActivations(nodes: InnerNode[]): Map<string, number> {
+  const result = new Map<string, number>();
+  if (nodes.length === 0) return result;
+  const maxActivation = Math.max(...nodes.map((n) => n.activation), 0);
+  for (const node of nodes) {
+    result.set(node.id, maxActivation === 0 ? 0 : node.activation / maxActivation);
+  }
+  return result;
+}
+
 function describeEvent(payload: unknown, participants: string[]): string {
   if (payload && typeof payload === "object" && "label" in payload) {
     return String((payload as { label: unknown }).label);
@@ -71,6 +87,7 @@ export function toUiPayload(run: RunState, world?: WorldState, kieselWesenObject
   const edges = [...run.model.edges.values()];
   const positions = normalizeNodePositions(nodes);
   const weights = normalizeEdgeWeights(edges);
+  const activations = normalizeNodeActivations(nodes);
   const events = run.log.events;
   const lastEvent = events[events.length - 1];
 
@@ -85,6 +102,7 @@ export function toUiPayload(run: RunState, world?: WorldState, kieselWesenObject
       id: node.id,
       label: node.id,
       ...(positions.get(node.id) ?? { x: 0.5, y: 0.5 }),
+      activation: activations.get(node.id) ?? 0,
     })),
     edges: edges.map((edge) => ({
       source: edge.nodeA,

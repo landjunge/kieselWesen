@@ -188,6 +188,55 @@ describe("E2E — Ruhephase", () => {
     expect(historyText).toContain("Ruheschritt");
     await page.context().close();
   });
+
+  it("echte Bedienelemente in Box 2 steuern die Ruhephase (kein Debug-Hook nötig)", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+
+    const stepButton = page.locator("#rest-step");
+    const toggleButton = page.locator("#rest-toggle");
+    expect(await stepButton.isDisabled()).toBe(true);
+    expect(await toggleButton.textContent()).toBe("Ruhephase betreten");
+
+    await toggleButton.click();
+    await page.waitForTimeout(100);
+    expect(await toggleButton.textContent()).toBe("Ruhephase verlassen");
+    expect(await stepButton.isDisabled()).toBe(false);
+
+    await stepButton.click();
+    await page.waitForTimeout(100);
+    const eventText = await page.locator("#current-event").textContent();
+    expect(eventText).toContain("Ruheschritt");
+
+    await toggleButton.click();
+    await page.waitForTimeout(100);
+    expect(await toggleButton.textContent()).toBe("Ruhephase betreten");
+    expect(await stepButton.isDisabled()).toBe(true);
+    await page.context().close();
+  });
+});
+
+describe("E2E — Graph unterscheidet Distanz, Nutzung und Aktivierung visuell", () => {
+  it("stärker aktivierte Knoten werden größer/deutlicher dargestellt als schwächer aktivierte", async () => {
+    const { page } = await freshPage();
+    // "plant" einmal berühren, "cat" zusätzlich noch als Paar-Ereignis mit
+    // "kiesel" verknüpfen, damit ein klarer Aktivierungsunterschied entsteht.
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(150);
+
+    const radii = await page.locator("#graph-stage svg circle.graph-node").evaluateAll((els) =>
+      els.map((el) => Number(el.getAttribute("r"))),
+    );
+    expect(radii.length).toBeGreaterThanOrEqual(2);
+    const distinctRadii = new Set(radii);
+    expect(distinctRadii.size).toBeGreaterThan(1);
+    await page.context().close();
+  });
 });
 
 describe("E2E — Zwei identische Läufe und Vergleich", () => {

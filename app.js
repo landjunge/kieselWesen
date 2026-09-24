@@ -111,16 +111,9 @@ for (const element of document.querySelectorAll(".room-object")) {
 render();
 
 /**
- * Testschnittstelle für automatisierte Prüfungen (kein UI-Feature):
- * erlaubt, den Mehrfach-Kiesel-Vergleich (Phase 10) auch im echten
- * Browser zu verifizieren — zwei Instanzen aus dem aktuellen Zustand,
- * dieselbe Ereignisfolge abgespielt, Ergebnis verglichen.
- */
-/**
- * Ruhephase (Bauplan Phase 8): noch ohne UI-Auslöser (kein UI-Feature
- * erfunden). Erlaubt der Testschnittstelle, den bereits getesteten
- * Ruheschritt (experimentEngine.runRestStep) im echten Browser mit
- * klarer Ereignisgrenze beim Wechsel zu prüfen.
+ * Ruhephase (Bauplan Phase 8): klare Ereignisgrenze beim Wechsel, ein
+ * Ruheschritt wirkt nur innerhalb der Ruhephase. Von echten Bedienelementen
+ * in Box 2 und von der Testschnittstelle gleichermaßen genutzt.
  */
 function setRestActive(active) {
   run.restActive = active;
@@ -135,31 +128,54 @@ function setRestActive(active) {
   });
   run.log = log;
   saveRunToStorage(run);
+  updateRestControls();
   render();
 }
 
+function applyRestStep() {
+  if (!run.restActive) return { applied: false, reason: "not in rest phase" };
+  const at = Date.now();
+  const result = runRestStep(run.model, run.engineConfig, at);
+  run.model = result.state;
+  eventCounter += 1;
+  const eventId = `ev${eventCounter}`;
+  const { log } = appendEvent(run.log, {
+    id: eventId,
+    time: at,
+    participants: [],
+    payload: { label: `Ruheschritt: ${result.changes.length} Änderung(en)` },
+  });
+  run.log = log;
+  saveRunToStorage(run);
+  render();
+  return { applied: true, changeCount: result.changes.length };
+}
+
+const restToggleButton = document.getElementById("rest-toggle");
+const restStepButton = document.getElementById("rest-step");
+
+function updateRestControls() {
+  if (!restToggleButton || !restStepButton) return;
+  restToggleButton.textContent = run.restActive ? "Ruhephase verlassen" : "Ruhephase betreten";
+  restStepButton.disabled = !run.restActive;
+}
+
+restToggleButton?.addEventListener("click", () => setRestActive(!run.restActive));
+restStepButton?.addEventListener("click", () => applyRestStep());
+updateRestControls();
+
+/**
+ * Testschnittstelle für automatisierte Prüfungen (kein zusätzliches
+ * UI-Feature, nur direkter Zugriff auf dieselbe Logik wie die Buttons
+ * oben): erlaubt, den Mehrfach-Kiesel-Vergleich (Phase 10) auch im echten
+ * Browser zu verifizieren — zwei Instanzen aus dem aktuellen Zustand,
+ * dieselbe Ereignisfolge abgespielt, Ergebnis verglichen.
+ */
 window.KieselWesenDebug = Object.freeze({
   getRun: () => run,
   enterRest: () => setRestActive(true),
   exitRest: () => setRestActive(false),
-  runRestStep: () => {
-    if (!run.restActive) return { applied: false, reason: "not in rest phase" };
-    const at = Date.now();
-    const result = runRestStep(run.model, run.engineConfig, at);
-    run.model = result.state;
-    eventCounter += 1;
-    const eventId = `ev${eventCounter}`;
-    const { log } = appendEvent(run.log, {
-      id: eventId,
-      time: at,
-      participants: [],
-      payload: { label: `Ruheschritt: ${result.changes.length} Änderung(en)` },
-    });
-    run.log = log;
-    saveRunToStorage(run);
-    render();
-    return { applied: true, changeCount: result.changes.length };
-  },
+  runRestStep: () => applyRestStep(),
   compareIdenticalReplay: (actions) => {
     const [instanceA, instanceB] = createInstances(run, ["debug-a", "debug-b"], Date.now());
     const finalA = replaySequence(instanceA, actions, 1);
