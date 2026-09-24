@@ -14,29 +14,32 @@
   <main class="workspace">
     <section class="panel world-panel" aria-labelledby="world-title">
       <div class="panel-header"><div><span class="eyebrow">AUSSENWELT</span><h1 id="world-title">Das Zimmer</h1></div><span class="subtle">Ansicht von oben</span></div>
-      <div class="room-frame"><div class="room" role="img" aria-label="Zimmer von oben mit KieselWesen, Katze, genau einer Pflanze, Bett und Kiste mit Kram">
+      <div class="room-toolbar"><span>64 × 64 Felder · Raster ausgeblendet</span><div class="zoom-controls" aria-label="Raum vergrößern"><button type="button" id="zoom-out" aria-label="Verkleinern">−</button><output id="zoom-value">100 %</output><button type="button" id="zoom-in" aria-label="Vergrößern">+</button></div></div>
+      <div class="room-frame"><div class="room" id="room" role="group" aria-label="Zimmer von oben mit KieselWesen, Katze, genau einer Pflanze, Bett und Kiste mit Kram">
         <div class="wall wall-top"></div><div class="wall wall-left"></div><div class="wall wall-right"></div><div class="window" aria-hidden="true"></div>
         <div class="rug" aria-hidden="true"></div>
-        <div class="bed" aria-hidden="true"><div class="pillow"></div><div class="blanket"></div></div>
-        <div class="plant" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div>
-        <div class="crate" aria-hidden="true"><span></span><span></span><span></span></div>
-        <div class="cat" aria-hidden="true"><span class="cat-ears"></span><span class="cat-body"></span><span class="cat-tail"></span></div>
-        <div class="kiesel" aria-hidden="true"><span class="kiesel-face"></span></div>
+        <button type="button" class="bed room-object" data-object="Bett" aria-label="Bett, etwa 8 mal 12 Felder"><span class="pillow"></span><span class="blanket"></span></button>
+        <button type="button" class="plant room-object" data-object="Pflanze" aria-label="Pflanze, 3 mal 3 Felder"><i></i><i></i><i></i><i></i><b></b></button>
+        <button type="button" class="crate room-object" data-object="Kiste mit Kram" aria-label="Kiste mit Kram"><span></span><span></span><span></span></button>
+        <button type="button" class="cat room-object" data-object="Katze" aria-label="Katze"><span class="cat-ears"></span><span class="cat-body"></span><span class="cat-tail"></span></button>
+        <button type="button" class="kiesel room-object" data-object="KieselWesen" aria-label="KieselWesen"><span class="kiesel-face"></span></button>
       </div></div>
+      <p class="object-info" id="object-info" aria-live="polite">Wähle ein Objekt im Zimmer aus.</p>
       <div class="room-key"><span><i class="dot stone"></i>KieselWesen</span><span><i class="dot amber"></i>Katze</span><span><i class="dot green"></i>Pflanze</span><span><i class="dot wood"></i>Kiste/Kram</span></div>
     </section>
     <section class="panel middle-panel" aria-labelledby="being-title">
       <div class="panel-header"><div><span class="eyebrow">GEGENWART</span><h2 id="being-title">KieselWesen</h2></div></div>
       <div class="being-portrait" aria-hidden="true"><div class="portrait-glow"></div><div class="portrait-stone"><span></span></div></div>
-      <div class="status"><span class="status-light"></span><span>Ansicht bereit</span></div>
-      <div class="detail"><span class="eyebrow">AKTUELLES EREIGNIS</span><p>Noch kein Ereignis. Der Simulationskern wird hier angeschlossen.</p></div>
-      <div class="middle-note">Diese Ansicht zeigt später nur den gerade nötigen Zustand und die tatsächlich verfügbaren Aktionen.</div>
+      <div class="status"><span class="status-light"></span><span id="simulation-status">Warte auf Simulationsdaten</span></div>
+      <div class="detail"><span class="eyebrow">AKTUELLES EREIGNIS</span><p id="current-event">Noch kein Ereignis.</p></div>
+      <div class="state-list" id="state-list" aria-live="polite"><span class="eyebrow">ZUSTAND</span><p>Noch keine Zustandsdaten.</p></div>
+      <div class="middle-note">Raum und Beobachtung sind bereit. Der Simulationskern wird separat angeschlossen.</div>
     </section>
     <section class="panel inside-panel" aria-labelledby="inside-title">
       <div class="panel-header"><div><span class="eyebrow">INNENLEBEN</span><h2 id="inside-title">Knoten & Straßen</h2></div></div>
-      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Innenleben</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button></div>
-      <div class="tab-panel graph-panel" id="view-graph" role="tabpanel" aria-labelledby="tab-graph"><div class="empty-graphic" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><i></i></div><strong>Noch keine inneren Daten</strong><p>Hier erscheinen später echte Knoten, Verbindungen und räumliche Veränderungen.</p></div>
-      <div class="tab-panel history-panel" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden><strong>Noch kein Verlauf</strong><p>Sobald Ereignisse aufgezeichnet werden, lassen sich Änderungen hier nachvollziehen.</p></div>
+      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Graph</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button></div>
+      <div class="tab-panel graph-panel" id="view-graph" role="tabpanel" aria-labelledby="tab-graph"><div class="graph-stage" id="graph-stage"><div class="empty-graphic" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><i></i></div><strong>Noch keine inneren Daten</strong><p>Hier erscheinen echte Knoten und Verbindungen, sobald sie geliefert werden.</p></div></div>
+      <div class="tab-panel history-panel" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden><div id="history-list"><strong>Noch kein Verlauf</strong><p>Ereignisse und Änderungen erscheinen hier in zeitlicher Reihenfolge.</p></div></div>
       <div class="inside-footer">Distanz, Nutzung und Aktivierung bleiben getrennte Werte.</div>
     </section>
   </main>
