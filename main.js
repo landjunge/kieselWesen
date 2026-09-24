@@ -63,7 +63,11 @@ function renderGraph(nodes, edges) {
   // Testschnittstelle (kein UI-Feature): erlaubt automatisierten Tests zu
   // prüfen, dass Aktivierung sich tatsächlich in unterschiedlicher
   // Knotengröße niederschlägt, ohne in die WebGL-Szene hineinzusehen.
-  window.__kieselwesenGraph3DDebug = { nodeCount: nodes.length, radii: graph3dView.getLastNodeRadii() };
+  window.__kieselwesenGraph3DDebug = {
+    nodeCount: nodes.length,
+    radii: graph3dView.getLastNodeRadii(),
+    disposedResourceCount: graph3dView.getDisposedResourceCount(),
+  };
 }
 function renderHistory(history) {
   const list = document.getElementById('history-list');
