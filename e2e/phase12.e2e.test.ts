@@ -309,3 +309,38 @@ describe("E2E — Zwei identische Läufe und Vergleich", () => {
     await page.context().close();
   });
 });
+
+describe("E2E — Vergleichsansicht über echte Bedienelemente (kein Debug-Hook)", () => {
+  it("Tab 'Vergleich' zeigt echten Vergleichsbutton mit Anfangszustand", async () => {
+    const { page } = await freshPage();
+    await page.click("#tab-compare");
+    const resultText = await page.locator("#compare-result").textContent();
+    expect(resultText).toContain("Noch kein Vergleichslauf");
+    await page.context().close();
+  });
+
+  it("Klick auf 'Vergleich: gleiche Folge' zeigt identisches Ergebnis", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click("#tab-compare");
+    await page.click("#compare-identical");
+    const resultText = await page.locator("#compare-result").textContent();
+    expect(resultText).toContain("identisch.");
+    expect(resultText).not.toContain("nicht identisch");
+    await page.context().close();
+  });
+
+  it("Klick auf 'Vergleich: abweichende Folge' zeigt konkrete Knotenunterschiede", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click("#tab-compare");
+    await page.click("#compare-deviated");
+    const resultText = await page.locator("#compare-result").textContent();
+    expect(resultText).toContain("nicht identisch");
+    expect(resultText).toContain("Knotenunterschiede:");
+    expect(resultText).toContain("plant");
+    await page.context().close();
+  });
+});

@@ -38,9 +38,17 @@
     </section>
     <section class="panel inside-panel" aria-labelledby="inside-title">
       <div class="panel-header"><div><span class="eyebrow">INNENLEBEN</span><h2 id="inside-title">Knoten & Straßen</h2></div></div>
-      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Graph</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button></div>
+      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Graph</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button><button id="tab-compare" type="button" role="tab" aria-selected="false" aria-controls="view-compare" tabindex="-1">Vergleich</button></div>
       <div class="tab-panel graph-panel" id="view-graph" role="tabpanel" aria-labelledby="tab-graph"><div class="graph-stage" id="graph-stage"><div class="empty-graphic" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><i></i></div><strong>Noch keine inneren Daten</strong><p>Hier erscheinen echte Knoten und Verbindungen, sobald sie geliefert werden.</p></div></div>
       <div class="tab-panel history-panel" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden><div id="history-list"><strong>Noch kein Verlauf</strong><p>Ereignisse und Änderungen erscheinen hier in zeitlicher Reihenfolge.</p></div></div>
+      <div class="tab-panel compare-panel" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+        <p class="compare-intro">Zwei Instanzen aus dem aktuellen Zustand: dieselbe oder eine abweichende Ereignisfolge abspielen und tatsächliche Unterschiede an Knoten/Kanten sehen. Keine Interpretation, keine neuen Regeln — nur der vorhandene Versuchsmotor zweimal ausgeführt.</p>
+        <div class="compare-controls" role="group" aria-label="Vergleichslauf-Steuerung">
+          <button type="button" id="compare-identical">Vergleich: gleiche Folge</button>
+          <button type="button" id="compare-deviated">Vergleich: abweichende Folge</button>
+        </div>
+        <div id="compare-result" aria-live="polite"><p>Noch kein Vergleichslauf gestartet.</p></div>
+      </div>
       <div class="inside-footer">Distanz, Nutzung und Aktivierung bleiben getrennte Werte.</div>
     </section>
   </main>
