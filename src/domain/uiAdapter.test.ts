@@ -54,11 +54,25 @@ describe("toUiPayload", () => {
       expect(node.x).toBeLessThanOrEqual(1);
       expect(node.y).toBeGreaterThanOrEqual(0);
       expect(node.y).toBeLessThanOrEqual(1);
+      expect(node.activation).toBeGreaterThanOrEqual(0);
+      expect(node.activation).toBeLessThanOrEqual(1);
     }
     expect(payload.edges).toEqual([{ source: "n1", target: "n2", weight: 1 }]);
     expect(payload.event).toBe("Katze berührt");
     expect(payload.history).toEqual([{ label: "Katze berührt" }]);
     expect(payload.status).toBe("aktiv");
+  });
+
+  it("normiert Knotenaktivierung getrennt von Kantenstärke", () => {
+    let model = createEmptyModel();
+    model = createNode(model, { id: "n1", at: 0, position: { x: 0, y: 0, z: 0 }, activation: 0.4 });
+    model = createNode(model, { id: "n2", at: 0, position: { x: 1, y: 0, z: 0 }, activation: 0.8 });
+    const run: RunState = { ...seedRun(), model, log: createEmptyLog() };
+    const payload = toUiPayload(run);
+    const n1 = payload.nodes.find((n) => n.id === "n1");
+    const n2 = payload.nodes.find((n) => n.id === "n2");
+    expect(n1?.activation).toBeCloseTo(0.5);
+    expect(n2?.activation).toBeCloseTo(1);
   });
 
   it("liefert Position nur, wenn ein KieselWesen-Weltobjekt existiert", () => {
