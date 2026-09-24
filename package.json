@@ -6,10 +6,12 @@
   "description": "KieselWesen — Ereigniskern und inneres Datenmodell (Knoten/Verbindungen). Kein UI-Code.",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:web": "esbuild src/domain/browser.ts --bundle --format=esm --outfile=dist-browser/domain/browser.js"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "esbuild": "^0.24.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
