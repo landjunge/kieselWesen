@@ -189,3 +189,52 @@ window.KieselWesenDebug = Object.freeze({
     return compareRuns(finalA, finalB);
   },
 });
+
+/**
+ * Echte Bedienelemente für den Mehrfach-Kiesel-Vergleich (Phase 10):
+ * dieselbe Logik wie window.KieselWesenDebug.compareIdenticalReplay/
+ * compareDeviatedReplay, jetzt über echte Buttons statt nur die
+ * Testschnittstelle erreichbar — ein einziger Codepfad für beide.
+ * Nutzt echte Weltobjekt-IDs, keine erfundenen Aktionen.
+ */
+const compareIdenticalButton = document.getElementById("compare-identical");
+const compareDeviatedButton = document.getElementById("compare-deviated");
+const compareResult = document.getElementById("compare-result");
+
+function renderNodeDiffs(nodeDiffs) {
+  if (nodeDiffs.length === 0) return "keine";
+  return nodeDiffs
+    .map((diff) => `${diff.nodeId}: ${diff.activationA.toFixed(2)} vs. ${diff.activationB.toFixed(2)} (Δ ${diff.delta.toFixed(2)})`)
+    .join("; ");
+}
+
+function renderCompareResult(comparison) {
+  if (!compareResult) return;
+  compareResult.replaceChildren();
+  const summary = document.createElement("p");
+  summary.textContent = comparison.identical ? "Ergebnis: identisch." : "Ergebnis: nicht identisch.";
+  compareResult.append(summary);
+  if (!comparison.identical) {
+    const diffs = document.createElement("p");
+    diffs.textContent = `Knotenunterschiede: ${renderNodeDiffs(comparison.nodeDiffs)}`;
+    compareResult.append(diffs);
+  }
+}
+
+compareIdenticalButton?.addEventListener("click", () => {
+  const [instanceA, instanceB] = createInstances(run, ["ui-a", "ui-b"], Date.now());
+  const actions = [
+    { kind: "single", nodeId: "plant" },
+    { kind: "single", nodeId: "cat" },
+  ];
+  const finalA = replaySequence(instanceA, actions, 1);
+  const finalB = replaySequence(instanceB, actions, 1);
+  renderCompareResult(compareRuns(finalA, finalB));
+});
+
+compareDeviatedButton?.addEventListener("click", () => {
+  const [instanceA, instanceB] = createInstances(run, ["ui-a2", "ui-b2"], Date.now());
+  const finalA = replaySequence(instanceA, [{ kind: "single", nodeId: "plant" }], 1);
+  const finalB = replaySequence(instanceB, [{ kind: "single", nodeId: "plant" }, { kind: "single", nodeId: "plant" }], 1);
+  renderCompareResult(compareRuns(finalA, finalB));
+});
