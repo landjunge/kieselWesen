@@ -1,0 +1,15 @@
+{
+  "name": "kieselwesen-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "KieselWesen — Ereigniskern und inneres Datenmodell (Knoten/Verbindungen). Kein UI-Code.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

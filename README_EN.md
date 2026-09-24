@@ -35,9 +35,18 @@ this repo and is not continued here.
 
 ## Status & getting started
 
-The project is currently in the repo groundwork phase. An app scaffold
-and a documented local start command will follow with the next build
-phase.
+The code substrate exists so far: an append-only event core and the
+inner data model (nodes, connections, distance/usage/activation kept as
+separate values) under `src/domain/`. The UI/design is developed
+separately and is not wired in here yet.
+
+Run developer tests locally:
+
+```sh
+npm install
+npm run typecheck
+npm test
+```
 
 ## License
 
