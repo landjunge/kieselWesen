@@ -3,7 +3,16 @@
     "allow": [
       "mcp__Notion__notion-search",
       "mcp__Notion__notion-fetch",
-      "mcp__github__pull_request_read"
+      "mcp__github__pull_request_read",
+      "mcp__github__get_file_contents",
+      "mcp__github__list_pull_requests",
+      "mcp__github__list_commits",
+      "mcp__github__get_commit",
+      "Bash(git status)",
+      "Bash(git status --short)",
+      "Bash(git diff)",
+      "Bash(git diff --stat)",
+      "Bash(git log -5 --oneline)"
     ]
   }
 }
