@@ -1,4 +1,5 @@
 import { createReadStream, existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,7 +77,7 @@ async function waitForNodeCount(page: import("playwright").Page, expectedCount: 
 }
 
 async function freshPage() {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
   context = ctx;
   const page = await ctx.newPage();
   const consoleErrors: string[] = [];
@@ -270,6 +271,66 @@ describe("E2E — Graph gibt WebGL-Ressourcen bei Neuzeichnen frei", () => {
     // der vorherigen Gruppe frei — mindestens 1 Geometrie + 1 Material für den
     // ersten Knoten.
     expect(disposedResourceCount).toBeGreaterThan(0);
+    await page.context().close();
+  });
+});
+
+describe("E2E — Lauf-Werkzeuge über echte Bedienelemente (Export, Snapshot, Abzweigung)", () => {
+  it("Export liefert eine lesbare, prüfbare JSON-Datei des aktuellen Laufs", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(150);
+    await page.click("#tab-run");
+
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("#run-export")]);
+    const exportPath = await download.path();
+    expect(exportPath).toBeTruthy();
+    const content = await readFile(exportPath!, "utf-8");
+    const parsed = JSON.parse(content);
+    expect(parsed.runId).toBe("lokal-vorschau");
+    expect(parsed.nodes.length).toBeGreaterThanOrEqual(2);
+    expect(parsed.log.events.length).toBeGreaterThanOrEqual(2);
+    await page.context().close();
+  });
+
+  it("Snapshot anlegen und daraus abzweigen lässt den Ursprungslauf unverändert", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(150);
+
+    const originBefore = await page.evaluate(() => JSON.parse(localStorage.getItem("kieselwesen:lokal-vorschau")!));
+
+    await page.click("#tab-run");
+    expect(await page.isDisabled("#run-branch")).toBe(true);
+    await page.click("#run-snapshot");
+    const snapshotResult = await page.locator("#run-tools-result").textContent();
+    expect(snapshotResult).toContain("Snapshot");
+    expect(snapshotResult).toContain("angelegt");
+    expect(await page.isDisabled("#run-branch")).toBe(false);
+
+    await page.click("#run-branch");
+    const branchResult = await page.locator("#run-tools-result").textContent();
+    expect(branchResult).toContain("Abzweigung");
+    expect(branchResult).toContain("abgezweigt von");
+    expect(branchResult).toContain("unverändert");
+
+    const branchKeys = await page.evaluate(() =>
+      Object.keys(localStorage).filter((key) => key.startsWith("kieselwesen:branch:")),
+    );
+    expect(branchKeys.length).toBe(1);
+    const branch = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)!),
+      branchKeys[0],
+    );
+    expect(branch.branchedFromRunId).toBe("lokal-vorschau");
+    expect(branch.nodes.length).toBe(2);
+
+    const originAfter = await page.evaluate(() => JSON.parse(localStorage.getItem("kieselwesen:lokal-vorschau")!));
+    expect(originAfter).toEqual(originBefore);
     await page.context().close();
   });
 });

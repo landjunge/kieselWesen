@@ -6,6 +6,7 @@ import {
   appendEvent,
   applyEventToPair,
   applyEventToSingleNode,
+  branchFromSnapshot,
   compareRuns,
   createEmptyLog,
   createEmptyModel,
@@ -14,6 +15,7 @@ import {
   demoEngineParams,
   deserializeRun,
   ensureEdge,
+  exportRunAsJson,
   replaySequence,
   runRestStep,
   seedInitialRoom,
@@ -31,6 +33,8 @@ const OBJECT_ID_BY_CLASS = {
 };
 
 const STORAGE_KEY = "kieselwesen:lokal-vorschau";
+const SNAPSHOT_STORAGE_PREFIX = "kieselwesen:snapshot:";
+const BRANCH_STORAGE_PREFIX = "kieselwesen:branch:";
 
 function loadRunFromStorage() {
   try {
@@ -163,6 +167,60 @@ function updateRestControls() {
 restToggleButton?.addEventListener("click", () => setRestActive(!run.restActive));
 restStepButton?.addEventListener("click", () => applyRestStep());
 updateRestControls();
+
+/**
+ * Lauf-Werkzeuge (Bauplan Phase 9): Export in ein lesbares Format,
+ * Snapshot anlegen und daraus eine neue Abzweigung starten — die
+ * bereits getestete Domainlogik (exportRunAsJson/serializeRun/
+ * branchFromSnapshot) jetzt über echte Bedienelemente statt nur als
+ * ungenutzte Funktionen im Browser-Bundle. Der Ursprungslauf wird nie
+ * überschrieben: Snapshot und Abzweigung liegen unter eigenen
+ * localStorage-Schlüsseln.
+ */
+const runExportButton = document.getElementById("run-export");
+const runSnapshotButton = document.getElementById("run-snapshot");
+const runBranchButton = document.getElementById("run-branch");
+const runToolsResult = document.getElementById("run-tools-result");
+
+let lastSnapshotId = null;
+
+runExportButton?.addEventListener("click", () => {
+  const json = exportRunAsJson(run);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${run.runId}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  if (runToolsResult) runToolsResult.textContent = `Lauf "${run.runId}" als ${run.runId}.json exportiert.`;
+});
+
+runSnapshotButton?.addEventListener("click", () => {
+  const snapshotId = `s${Date.now()}`;
+  localStorage.setItem(SNAPSHOT_STORAGE_PREFIX + snapshotId, JSON.stringify(serializeRun(run)));
+  lastSnapshotId = snapshotId;
+  if (runBranchButton) runBranchButton.disabled = false;
+  if (runToolsResult) runToolsResult.textContent = `Snapshot "${snapshotId}" von Lauf "${run.runId}" angelegt (${run.model.nodes.size} Knoten).`;
+});
+
+runBranchButton?.addEventListener("click", () => {
+  if (!lastSnapshotId) return;
+  const raw = localStorage.getItem(SNAPSHOT_STORAGE_PREFIX + lastSnapshotId);
+  if (!raw) return;
+  const snapshot = deserializeRun(JSON.parse(raw));
+  const branchRunId = `branch-${Date.now()}`;
+  const branch = branchFromSnapshot(snapshot, branchRunId, Date.now());
+  localStorage.setItem(BRANCH_STORAGE_PREFIX + branchRunId, JSON.stringify(serializeRun(branch)));
+  if (runToolsResult) {
+    runToolsResult.textContent =
+      `Abzweigung "${branch.runId}" aus Snapshot "${lastSnapshotId}" erstellt ` +
+      `(abgezweigt von "${branch.branchedFromRunId}", ${branch.model.nodes.size} Knoten). ` +
+      `Ursprungslauf "${run.runId}" bleibt unverändert.`;
+  }
+});
 
 /**
  * Testschnittstelle für automatisierte Prüfungen (kein zusätzliches
