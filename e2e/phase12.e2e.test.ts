@@ -500,3 +500,83 @@ describe("E2E — Vergleichsansicht über echte Bedienelemente (kein Debug-Hook)
     await page.context().close();
   });
 });
+
+describe("E2E — Mini-Lerner lernt echte Übergänge (eigenes Modell, kein externes LLM)", () => {
+  it("zeigt vor der ersten Berührung noch keine gelernten Übergänge", async () => {
+    const { page } = await freshPage();
+    await page.click("#tab-learner");
+    const resultText = await page.locator("#learner-result").textContent();
+    expect(resultText).toContain("Noch keine Übergänge gelernt");
+    await page.context().close();
+  });
+
+  it("lernt aus einer echten Berührungsfolge und sagt den beobachteten Übergang voraus", async () => {
+    const { page } = await freshPage();
+    // plant->cat wird beim 2. Klick gelernt (Übergang vom zuvor berührten
+    // zum neu berührten Knoten); erst der 3. Klick (zurück zu "plant")
+    // macht "plant" wieder zum zuletzt berührten Knoten, sodass die
+    // Vorhersage ab "plant" den gelernten Übergang zu "cat" zeigt.
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click(".cat");
+    await page.waitForTimeout(80);
+    await page.click(".plant");
+    await page.waitForTimeout(150);
+    await page.click("#tab-learner");
+    const resultText = await page.locator("#learner-result").textContent();
+    expect(resultText).toContain('Zuletzt berührt: "plant"');
+    expect(resultText).toContain("cat");
+    expect(resultText).toMatch(/cat:\s*\d+\s*%/);
+    await page.context().close();
+  });
+
+  it("wiederholtes Beobachten desselben Übergangs erhöht die gelernte Wahrscheinlichkeit", async () => {
+    const { page } = await freshPage();
+    // Zwei konkurrierende Übergänge von "plant" aus je einmal lernen:
+    // plant->cat und plant->kiesel.
+    await page.click(".plant");
+    await page.waitForTimeout(60);
+    await page.click(".cat");
+    await page.waitForTimeout(60);
+    await page.click(".plant");
+    await page.waitForTimeout(60);
+    await page.click(".kiesel");
+    await page.waitForTimeout(60);
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click("#tab-learner");
+    const afterOneEach = await page.locator("#learner-result").textContent();
+    const firstProbability = Number(afterOneEach!.match(/cat:\s*(\d+)\s*%/)![1]);
+
+    // plant->cat ein zweites Mal beobachten.
+    await page.click("#tab-graph");
+    await page.click(".cat");
+    await page.waitForTimeout(60);
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click("#tab-learner");
+    const afterExtraCat = await page.locator("#learner-result").textContent();
+    const secondProbability = Number(afterExtraCat!.match(/cat:\s*(\d+)\s*%/)![1]);
+
+    expect(secondProbability).toBeGreaterThan(firstProbability);
+    await page.context().close();
+  });
+
+  it("der gelernte Zustand übersteht einen Reload (persistiert mit dem Lauf)", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(150);
+    await page.click("#tab-learner");
+    const before = await page.locator("#learner-result").textContent();
+
+    await page.reload();
+    await page.waitForTimeout(300);
+    await page.click("#tab-learner");
+    const after = await page.locator("#learner-result").textContent();
+
+    expect(after).toBe(before);
+    await page.context().close();
+  });
+});

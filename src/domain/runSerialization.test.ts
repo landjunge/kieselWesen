@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { appendEvent, createEmptyLog } from "./eventLog.js";
 import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
+import { createEmptyLearner, learnTransition, predictNext } from "./miniLearner.js";
 import {
   branchFromSnapshot,
   deserializeRun,
   exportRunAsJson,
+  getLearner,
   serializeRun,
   type RunState,
 } from "./runSerialization.js";
@@ -92,5 +94,23 @@ describe("Lauf-Serialisierung — Export in ein lesbares/prüfbares Format (Phas
     expect(withSameSeed.seed).toBe("seed-123");
     const withNewSeed = branchFromSnapshot(snapshot, "run-c", 1, "seed-456");
     expect(withNewSeed.seed).toBe("seed-456");
+  });
+});
+
+describe("Lauf-Serialisierung — Mini-Lerner bleibt erhalten", () => {
+  it("getLearner liefert einen leeren Lerner, wenn keiner gesetzt ist", () => {
+    const run = seedRun("run-a");
+    expect(getLearner(run)).toEqual(createEmptyLearner());
+  });
+
+  it("ein gesetzter Lerner übersteht Serialisierung/Export unverändert", () => {
+    let run = seedRun("run-a");
+    run = { ...run, learner: learnTransition(createEmptyLearner(), "n1", "n2") };
+
+    const restored = deserializeRun(serializeRun(run));
+    expect(predictNext(getLearner(restored), "n1")).toEqual(predictNext(getLearner(run), "n1"));
+
+    const restoredFromExport = deserializeRun(JSON.parse(exportRunAsJson(run)));
+    expect(predictNext(getLearner(restoredFromExport), "n1")).toEqual(predictNext(getLearner(run), "n1"));
   });
 });
