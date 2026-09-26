@@ -651,3 +651,62 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     await page.context().close();
   });
 });
+
+describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle", () => {
+  it("ohne hinterlegten API-Schlüssel wird keine Anfrage gestellt", async () => {
+    const { page } = await freshPage();
+    let requestSent = false;
+    await page.route("https://api.anthropic.com/v1/messages", async (route) => {
+      requestSent = true;
+      await route.fulfill({ json: { content: [{ type: "text", text: "cat" }] } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#cloud-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("API-Schlüssel") ?? false,
+    );
+
+    expect(requestSent).toBe(false);
+    await page.context().close();
+  });
+
+  it("mit API-Schlüssel liefert das Cloud-Modell einen Vorschlag, der erst nach Bestätigung lernt", async () => {
+    const { page } = await freshPage();
+    await page.route("https://api.anthropic.com/v1/messages", async (route) => {
+      await route.fulfill({ json: { content: [{ type: "text", text: "cat" }] } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.fill("#cloud-api-key", "sk-ant-test-key");
+    await page.dispatchEvent("#cloud-api-key", "change");
+    await page.click("#cloud-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    const beforeConfirm = await page.locator("#suggestions-result").textContent();
+    expect(beforeConfirm).toContain("claude-sonnet-5");
+    expect(beforeConfirm).toContain("plant");
+    expect(beforeConfirm).toContain("cat");
+
+    await page.click("#tab-learner");
+    const learnerBeforeConfirm = await page.locator("#learner-result").textContent();
+    expect(learnerBeforeConfirm).toContain("Noch kein gelernter Übergang");
+
+    await page.click("#tab-suggestions");
+    await page.click("#suggestions-result button:has-text('Bestätigen')");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("confirmed") ?? false,
+    );
+
+    await page.click("#tab-learner");
+    const learnerAfterConfirm = await page.locator("#learner-result").textContent();
+    expect(learnerAfterConfirm).toMatch(/cat:\s*\d+\s*%/);
+    await page.context().close();
+  });
+});

@@ -15,3 +15,4 @@ export * from "./compare.js";
 export * from "./miniLearner.js";
 export * from "./llmSuggestions.js";
 export * from "../llm/ollamaClient.js";
+export * from "../llm/anthropicClient.js";

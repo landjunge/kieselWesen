@@ -68,10 +68,15 @@
         <div id="learner-result" aria-live="polite"><p>Noch keine Übergänge gelernt.</p></div>
       </div>
       <div class="tab-panel suggestions-panel" id="view-suggestions" role="tabpanel" aria-labelledby="tab-suggestions" hidden>
-        <p class="suggestions-intro">Ein austauschbares, lokales LLM (über Ollama, komplett offline) kann einen Vorschlag machen, was auf den zuletzt berührten Knoten folgen könnte. Ein Vorschlag verändert Kiesels echtes Wissen nie von selbst — erst nach Bestätigung fließt er als echter Lernschritt ein, genau wie eine selbst beobachtete Erfahrung. Ein LLM kann sich irren; deshalb entscheidest du.</p>
-        <div class="suggestions-controls" role="group" aria-label="LLM-Vorschlag anfragen">
-          <label>Modell: <input type="text" id="llm-model" aria-label="Modellname" placeholder="llama3.2:3b"></label>
-          <button type="button" id="llm-suggest">Vorschlag anfragen</button>
+        <p class="suggestions-intro">Ein austauschbares LLM kann einen Vorschlag machen, was auf den zuletzt berührten Knoten folgen könnte — entweder ein lokales, kleines Modell (über Ollama, komplett offline) oder, für allgemeines Weltwissen, ein großes Modell über die Cloud (Anthropic API, eigener API-Schlüssel nötig, verlässt dieses Gerät nur direkt an die API). Ein Vorschlag verändert Kiesels echtes Wissen in beiden Fällen nie von selbst — erst nach Bestätigung fließt er als echter Lernschritt ein, genau wie eine selbst beobachtete Erfahrung. Auch ein großes Modell kann sich irren; deshalb entscheidest du.</p>
+        <div class="suggestions-controls" role="group" aria-label="Lokales LLM anfragen">
+          <label>Lokales Modell: <input type="text" id="llm-model" aria-label="Modellname (lokal)" placeholder="llama3.2:3b"></label>
+          <button type="button" id="llm-suggest">Vorschlag anfragen (lokal)</button>
+        </div>
+        <div class="suggestions-controls" role="group" aria-label="Großes Cloud-Modell anfragen">
+          <label>Cloud-Modell: <input type="text" id="cloud-model" aria-label="Modellname (Cloud)" placeholder="claude-sonnet-5"></label>
+          <label>API-Schlüssel: <input type="password" id="cloud-api-key" aria-label="Anthropic-API-Schlüssel" placeholder="sk-ant-..." autocomplete="off"></label>
+          <button type="button" id="cloud-suggest">Vorschlag anfragen (Cloud)</button>
         </div>
         <div id="suggestions-result" aria-live="polite"><p>Noch kein Vorschlag angefragt.</p></div>
       </div>
