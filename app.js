@@ -13,6 +13,7 @@ import {
   createInstances,
   addSuggestion,
   confirmSuggestion,
+  createAnthropicClient,
   createNode,
   createOllamaClient,
   demoEngineParams,
@@ -230,35 +231,70 @@ function renderLearnerPanel() {
 }
 
 /**
- * Vorschläge eines austauschbaren, lokalen LLM (Ollama). Ein Vorschlag
- * verändert Kiesels echtes Wissen (den Mini-Lerner) NIE von selbst — er
- * bleibt "unbestätigt", bis ein Mensch ihn per Klick bestätigt oder
- * verwirft. Nur eine Bestätigung erzeugt einen echten Lernschritt,
- * identisch zu einem selbst beobachteten Übergang (touchObject oben).
+ * Vorschläge eines austauschbaren LLM — lokal (Ollama) oder ein großes
+ * externes Modell über die Cloud (Anthropic), für allgemeines Weltwissen,
+ * das das kleine lokale Modell nicht hat. Beide Quellen münden im
+ * selben Bestätigungs-Workflow: ein Vorschlag verändert Kiesels echtes
+ * Wissen (den Mini-Lerner) NIE von selbst — er bleibt "unbestätigt", bis
+ * ein Mensch ihn per Klick bestätigt oder verwirft. Nur eine Bestätigung
+ * erzeugt einen echten Lernschritt, identisch zu einem selbst beobachteten
+ * Übergang (touchObject oben). Ein großes Modell kann sich genauso irren
+ * wie ein kleines — deshalb dieselbe Kontrolle für beide.
  */
 const LLM_MODEL_STORAGE_KEY = "kieselwesen:llm-model";
 const DEFAULT_LLM_MODEL = "llama3.2:3b";
+const CLOUD_MODEL_STORAGE_KEY = "kieselwesen:llm-cloud-model";
+const CLOUD_API_KEY_STORAGE_KEY = "kieselwesen:llm-cloud-apikey";
+const DEFAULT_CLOUD_MODEL = "claude-sonnet-5";
 let suggestionCounter = 0;
 
 function currentLlmModelName() {
   return localStorage.getItem(LLM_MODEL_STORAGE_KEY) ?? DEFAULT_LLM_MODEL;
 }
 
+function currentCloudModelName() {
+  return localStorage.getItem(CLOUD_MODEL_STORAGE_KEY) ?? DEFAULT_CLOUD_MODEL;
+}
+
+function currentCloudApiKey() {
+  return localStorage.getItem(CLOUD_API_KEY_STORAGE_KEY) ?? "";
+}
+
 const llmModelInput = document.getElementById("llm-model");
 const llmSuggestButton = document.getElementById("llm-suggest");
+const cloudModelInput = document.getElementById("cloud-model");
+const cloudApiKeyInput = document.getElementById("cloud-api-key");
+const cloudSuggestButton = document.getElementById("cloud-suggest");
 const suggestionsResult = document.getElementById("suggestions-result");
 
 if (llmModelInput) llmModelInput.value = currentLlmModelName();
+if (cloudModelInput) cloudModelInput.value = currentCloudModelName();
+if (cloudApiKeyInput) cloudApiKeyInput.value = currentCloudApiKey();
 
 llmModelInput?.addEventListener("change", () => {
   const value = llmModelInput.value.trim();
   if (value) localStorage.setItem(LLM_MODEL_STORAGE_KEY, value);
 });
 
-async function requestLlmSuggestion() {
+cloudModelInput?.addEventListener("change", () => {
+  const value = cloudModelInput.value.trim();
+  if (value) localStorage.setItem(CLOUD_MODEL_STORAGE_KEY, value);
+});
+
+cloudApiKeyInput?.addEventListener("change", () => {
+  // Bewusst nur lokal im Browser gespeichert (localStorage) — der Schlüssel
+  // verlässt dieses Gerät nur direkt an die Anthropic-API, nie an KieselWesen
+  // selbst oder einen Zwischenserver.
+  localStorage.setItem(CLOUD_API_KEY_STORAGE_KEY, cloudApiKeyInput.value);
+});
+
+/**
+ * Gemeinsamer Ablauf für beide Quellen: Prompt bauen, Modell befragen,
+ * Antwort als unbestätigten Vorschlag ablegen. `client`/`modelName` sind
+ * austauschbar — Kiesel selbst kennt nur die LlmClient-Schnittstelle.
+ */
+async function requestSuggestionFrom(client, modelName) {
   if (!lastTouchedNodeId) return;
-  const modelName = currentLlmModelName();
-  const client = createOllamaClient(modelName);
   const knownNodeIds = [...run.model.nodes.keys()];
   const prompt =
     `Bekannte Knoten: ${knownNodeIds.join(", ")}. ` +
@@ -295,7 +331,21 @@ async function requestLlmSuggestion() {
 }
 
 llmSuggestButton?.addEventListener("click", () => {
-  requestLlmSuggestion();
+  requestSuggestionFrom(createOllamaClient(currentLlmModelName()), currentLlmModelName());
+});
+
+cloudSuggestButton?.addEventListener("click", () => {
+  const apiKey = currentCloudApiKey();
+  if (!apiKey) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = "Kein API-Schlüssel für das große Cloud-Modell hinterlegt.";
+      suggestionsResult.replaceChildren(message);
+    }
+    return;
+  }
+  const modelName = currentCloudModelName();
+  requestSuggestionFrom(createAnthropicClient(apiKey, modelName), modelName);
 });
 
 function confirmSuggestionById(suggestionId) {
