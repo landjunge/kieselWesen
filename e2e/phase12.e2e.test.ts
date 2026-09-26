@@ -275,6 +275,50 @@ describe("E2E — Graph gibt WebGL-Ressourcen bei Neuzeichnen frei", () => {
   });
 });
 
+describe("E2E — Migration alter, vor Mehrfach-Lauf-Unterstützung gespeicherter Daten", () => {
+  it("ein Lauf unter dem alten, festen Speicherschlüssel wird beim Start automatisch übernommen", async () => {
+    const { page } = await freshPage();
+
+    // Simuliert einen Lauf, wie er vor PR #18 unter einem einzigen festen
+    // Schlüssel gespeichert wurde (keine Mehrfach-Lauf-Unterstützung).
+    await page.evaluate(() => {
+      localStorage.clear();
+      const legacyRun = {
+        runId: "lokal-vorschau",
+        seed: "lokal",
+        createdAt: 1,
+        restActive: false,
+        nodes: [{ id: "plant", createdAt: 1, position: { x: 0, y: 0, z: 0 }, activation: 0.2, history: [] }],
+        edges: [],
+        log: {
+          events: [
+            { id: "ev1", index: 0, time: 1, participants: ["plant"], payload: { label: "Pflanze berührt" } },
+          ],
+        },
+        engineConfig: {
+          params: { activationBoostOnUse: 0.2, edgeStrengthGainOnUse: 1, activationDecayPerRestStep: 0.05, edgeFadePerRestStep: 0.1 },
+          rulesEnabled: { activationOnUse: true, edgeStrengthOnUse: true, restDecay: true },
+        },
+      };
+      localStorage.setItem("kieselwesen:lokal-vorschau", JSON.stringify(legacyRun));
+    });
+    await page.reload();
+    await page.waitForTimeout(300);
+
+    expect(await page.textContent("#current-event")).toBe("Pflanze berührt");
+    expect(await page.evaluate(() => window.KieselWesenDebug.getRun().model.nodes.size)).toBe(1);
+    // Migriert in das neue Pro-Lauf-Schema, auffindbar über den Lauf-Wähler.
+    expect(await page.evaluate(() => localStorage.getItem("kieselwesen:run:lokal-vorschau") !== null)).toBe(true);
+    await page.click("#tab-run");
+    const optionValues = await page
+      .locator("#run-select option")
+      .evaluateAll((opts) => opts.map((o) => o.getAttribute("value")));
+    expect(optionValues).toContain("lokal-vorschau");
+
+    await page.context().close();
+  });
+});
+
 describe("E2E — Lauf-Werkzeuge über echte Bedienelemente (Export, Snapshot, Abzweigung)", () => {
   it("Export liefert eine lesbare, prüfbare JSON-Datei des aktuellen Laufs", async () => {
     const { page } = await freshPage();
@@ -292,6 +336,26 @@ describe("E2E — Lauf-Werkzeuge über echte Bedienelemente (Export, Snapshot, A
     expect(parsed.runId).toBe("lokal-vorschau");
     expect(parsed.nodes.length).toBeGreaterThanOrEqual(2);
     expect(parsed.log.events.length).toBeGreaterThanOrEqual(2);
+    await page.context().close();
+  });
+
+  it("Export liefert nach Wechsel auf eine Abzweigung den jeweils aktiven Lauf, nicht den Ursprung", async () => {
+    const { page } = await freshPage();
+    await page.click(".plant");
+    await page.waitForTimeout(150);
+    await page.click("#tab-run");
+    await page.click("#run-snapshot");
+    await page.click("#run-branch");
+    await page.waitForTimeout(150);
+    const activeRunId = await page.evaluate(() => window.KieselWesenDebug.getRun().runId);
+    expect(activeRunId).not.toBe("lokal-vorschau");
+
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("#run-export")]);
+    const exportPath = await download.path();
+    const content = await readFile(exportPath!, "utf-8");
+    const parsed = JSON.parse(content);
+    expect(parsed.runId).toBe(activeRunId);
+    expect(parsed.branchedFromRunId).toBe("lokal-vorschau");
     await page.context().close();
   });
 
