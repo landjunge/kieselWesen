@@ -8,9 +8,14 @@
     "test": "vitest run src",
     "test:e2e": "npm run build:web && vitest run e2e",
     "typecheck": "tsc --noEmit",
-    "build:web": "esbuild src/domain/browser.ts --bundle --format=esm --outfile=dist-browser/domain/browser.js && esbuild src/ui3d/entry.ts --bundle --minify --format=iife --outfile=dist-browser/ui3d/graph3d.js"
+    "build:web": "esbuild src/domain/browser.ts --bundle --format=esm --outfile=dist-browser/domain/browser.js && esbuild src/ui3d/entry.ts --bundle --minify --format=iife --outfile=dist-browser/ui3d/graph3d.js",
+    "build:app-dist": "npm run build:web && node scripts/build-app-dist.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^26.6.2",
     "@types/three": "^0.186.0",
     "esbuild": "^0.24.0",
