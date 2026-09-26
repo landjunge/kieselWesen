@@ -38,7 +38,7 @@
     </section>
     <section class="panel inside-panel" aria-labelledby="inside-title">
       <div class="panel-header"><div><span class="eyebrow">INNENLEBEN</span><h2 id="inside-title">Knoten & Straßen</h2></div></div>
-      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Graph</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button><button id="tab-compare" type="button" role="tab" aria-selected="false" aria-controls="view-compare" tabindex="-1">Vergleich</button><button id="tab-run" type="button" role="tab" aria-selected="false" aria-controls="view-run" tabindex="-1">Lauf</button></div>
+      <div class="tabs" role="tablist" aria-label="Innenleben Ansichten"><button id="tab-graph" type="button" role="tab" aria-selected="true" aria-controls="view-graph">Graph</button><button id="tab-history" type="button" role="tab" aria-selected="false" aria-controls="view-history" tabindex="-1">Verlauf</button><button id="tab-compare" type="button" role="tab" aria-selected="false" aria-controls="view-compare" tabindex="-1">Vergleich</button><button id="tab-run" type="button" role="tab" aria-selected="false" aria-controls="view-run" tabindex="-1">Lauf</button><button id="tab-learner" type="button" role="tab" aria-selected="false" aria-controls="view-learner" tabindex="-1">Lernen</button></div>
       <div class="tab-panel graph-panel" id="view-graph" role="tabpanel" aria-labelledby="tab-graph"><div class="graph-stage" id="graph-stage"><div class="empty-graphic" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><i></i></div><strong>Noch keine inneren Daten</strong><p>Hier erscheinen echte Knoten und Verbindungen, sobald sie geliefert werden.</p></div></div>
       <div class="tab-panel history-panel" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden><div id="history-list"><strong>Noch kein Verlauf</strong><p>Ereignisse und Änderungen erscheinen hier in zeitlicher Reihenfolge.</p></div></div>
       <div class="tab-panel compare-panel" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
@@ -62,6 +62,10 @@
           <button type="button" id="run-activate">Lauf wechseln</button>
         </div>
         <div id="run-tools-result" aria-live="polite"><p>Noch kein Snapshot angelegt.</p></div>
+      </div>
+      <div class="tab-panel learner-panel" id="view-learner" role="tabpanel" aria-labelledby="tab-learner" hidden>
+        <p class="learner-intro">Ein winziges, eigenes Modell — kein fertiges/externes LLM — lernt ausschließlich aus den echten Berührungen in diesem Lauf: welcher nächste Knoten nach dem zuletzt berührten am wahrscheinlichsten folgt. Reine gelernte Wahrscheinlichkeit aus bisherigen Übergängen, keine erfundene Bedeutung.</p>
+        <div id="learner-result" aria-live="polite"><p>Noch keine Übergänge gelernt.</p></div>
       </div>
       <div class="inside-footer">Distanz, Nutzung und Aktivierung bleiben getrennte Werte.</div>
     </section>

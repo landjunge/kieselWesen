@@ -16,6 +16,9 @@ import {
   deserializeRun,
   ensureEdge,
   exportRunAsJson,
+  getLearner,
+  learnTransition,
+  predictNext,
   replaySequence,
   runRestStep,
   seedInitialRoom,
@@ -126,6 +129,7 @@ function activateRun(runId) {
   updateRestControls();
   refreshRunSelect();
   render();
+  renderLearnerPanel();
   return true;
 }
 
@@ -160,11 +164,16 @@ function touchObject(objectId, label) {
     run.model = ensureEdge(run.model, { id: edgeId, at, nodeA: lastTouchedNodeId, nodeB: objectId });
     const pair = applyEventToPair(run.model, run.engineConfig, at, eventId, lastTouchedNodeId, objectId);
     run.model = pair.state;
+    // Mini-Lerner (Bauplan-offener Punkt "Sprache/LLM"): lernt ausschließlich
+    // aus dieser echten Übergangsfolge, keine erfundenen Werte, keine
+    // externe Wissensquelle.
+    run.learner = learnTransition(getLearner(run), lastTouchedNodeId, objectId);
   }
   lastTouchedNodeId = objectId;
 
   saveRunToStorage(run);
   render();
+  renderLearnerPanel();
 }
 
 for (const element of document.querySelectorAll(".room-object")) {
@@ -173,7 +182,49 @@ for (const element of document.querySelectorAll(".room-object")) {
   element.addEventListener("click", () => touchObject(worldId, element.dataset.object ?? worldId));
 }
 
+/**
+ * Zeigt die gelernte Vorhersage für den zuletzt berührten Knoten an —
+ * reine gelernte Fakten aus dem Mini-Lerner, keine Interpretation.
+ */
+function renderLearnerPanel() {
+  const container = document.getElementById("learner-result");
+  if (!container) return;
+  container.replaceChildren();
+
+  if (!lastTouchedNodeId) {
+    const message = document.createElement("p");
+    message.textContent = "Noch keine Übergänge gelernt.";
+    container.append(message);
+    return;
+  }
+
+  const predictions = predictNext(getLearner(run), lastTouchedNodeId);
+  const heading = document.createElement("p");
+  heading.textContent = `Zuletzt berührt: "${lastTouchedNodeId}".`;
+  container.append(heading);
+
+  if (predictions.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "Noch kein gelernter Übergang von diesem Knoten aus.";
+    container.append(empty);
+    return;
+  }
+
+  const label = document.createElement("p");
+  label.textContent = "Gelernte Vorhersage für den nächsten berührten Knoten:";
+  container.append(label);
+
+  const list = document.createElement("ol");
+  for (const prediction of predictions) {
+    const item = document.createElement("li");
+    item.textContent = `${prediction.toId}: ${Math.round(prediction.probability * 100)} %`;
+    list.append(item);
+  }
+  container.append(list);
+}
+
 render();
+renderLearnerPanel();
 
 /**
  * Ruhephase (Bauplan Phase 8): klare Ereignisgrenze beim Wechsel, ein

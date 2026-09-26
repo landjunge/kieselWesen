@@ -1,4 +1,11 @@
 import type { EngineConfig } from "./experimentEngine.js";
+import {
+  createEmptyLearner,
+  deserializeLearner,
+  serializeLearner,
+  type LearnerState,
+  type SerializedLearnerState,
+} from "./miniLearner.js";
 import type { Edge, EventLog, InnerModelState, InnerNode } from "./types.js";
 
 /**
@@ -17,6 +24,13 @@ export interface RunState {
   model: InnerModelState;
   log: EventLog;
   engineConfig: EngineConfig;
+  /**
+   * Winziges, eigenes lernendes Modell (siehe miniLearner.ts) — lernt
+   * ausschließlich aus den Ereignissen dieses Laufs. Optional, damit
+   * bestehender Code/Tests ohne Lerner-Feld unverändert bleiben; fehlt
+   * es, gilt ein leerer Lerner (siehe getLearner()).
+   */
+  learner?: LearnerState;
 }
 
 export interface SerializedRun {
@@ -29,6 +43,12 @@ export interface SerializedRun {
   edges: Edge[];
   log: EventLog;
   engineConfig: EngineConfig;
+  learner?: SerializedLearnerState;
+}
+
+/** Liefert den Lerner eines Laufs, oder einen leeren, falls (noch) keiner vorhanden ist. */
+export function getLearner(run: RunState): LearnerState {
+  return run.learner ?? createEmptyLearner();
 }
 
 export function serializeRun(run: RunState): SerializedRun {
@@ -42,6 +62,7 @@ export function serializeRun(run: RunState): SerializedRun {
     edges: [...run.model.edges.values()],
     log: run.log,
     engineConfig: run.engineConfig,
+    learner: run.learner ? serializeLearner(run.learner) : undefined,
   };
 }
 
@@ -61,6 +82,7 @@ export function deserializeRun(data: SerializedRun): RunState {
     model: { nodes, edges },
     log: data.log,
     engineConfig: data.engineConfig,
+    learner: data.learner ? deserializeLearner(data.learner) : undefined,
   };
 }
 
