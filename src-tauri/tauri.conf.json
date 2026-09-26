@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "KieselWesen",
+  "version": "0.1.0",
+  "identifier": "de.netzwerkpunkt.kieselwesen",
+  "build": {
+    "beforeBuildCommand": "npm run build:app-dist",
+    "beforeDevCommand": "npm run build:app-dist",
+    "frontendDist": "../app-dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "KieselWesen – Beobachtungsraum",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}

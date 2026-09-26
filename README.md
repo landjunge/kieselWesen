@@ -76,6 +76,51 @@ vorhanden ist. Ist das in der Umgebung nicht möglich, kann ein bereits
 installierter Chromium über `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/pfad/zu/chromium npm run test:e2e`
 verwendet werden.
 
+## Mac-Desktop-App (Tauri)
+
+Für den lokalen Gebrauch ohne Terminal/HTTP-Server gibt es eine native
+Mac-Anwendung, gebaut mit [Tauri](https://v2.tauri.app/): sie zeigt
+exakt dieselbe Web-Oberfläche (`index.html`/`app.js`/`main.js`) in
+einem eigenen Fenster, ohne eigene Logik. Getestet für Intel-Macs ab
+macOS 10.15 (Catalina) — geeignet auch für ältere Geräte wie ein
+MacBook (Intel Core i5) von 2015.
+
+**Der Build muss auf einem Mac laufen** (Xcode-Kommandozeilenwerkzeuge
+nötig) — er kann nicht aus einer Linux-Umgebung heraus für macOS
+kompiliert werden.
+
+Einmalig auf dem Mac einrichten:
+
+```sh
+xcode-select --install        # falls noch nicht installiert
+curl https://sh.rustup.rs -sSf | sh    # Rust-Toolchain für Tauri
+```
+
+Danach reicht ein einziger Befehl, um eine fertige `.dmg`-Installationsdatei
+zu bauen:
+
+```sh
+npm install
+npm run tauri:build
+```
+
+Das Ergebnis liegt danach unter
+`src-tauri/target/release/bundle/dmg/KieselWesen_0.1.0_x64.dmg`. Diese
+Datei per Doppelklick öffnen und die App in den `Programme`-Ordner
+ziehen — danach startet KieselWesen wie jede andere Mac-App, ganz ohne
+Terminal oder lokalen Server.
+
+Da die App nicht mit einem kostenpflichtigen Apple-Entwicklerzertifikat
+signiert ist, warnt macOS Gatekeeper beim ersten Start. Abhilfe: im
+Finder mit Rechtsklick auf die App → „Öffnen" wählen und im Dialog
+bestätigen (nur beim allerersten Start nötig).
+
+Zum Entwickeln mit Live-Fenster statt fertigem Installer:
+
+```sh
+npm run tauri:dev
+```
+
 ## Lizenz
 
 [PolyForm Noncommercial License 1.0.0](LICENSE).

@@ -73,6 +73,49 @@ Downloads Playwright's own Chromium if none is present yet. If that
 is not possible in your environment, an already installed Chromium can
 be used via `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium npm run test:e2e`.
 
+## Mac desktop app (Tauri)
+
+For local use without a terminal/HTTP server, there is a native Mac
+app built with [Tauri](https://v2.tauri.app/): it shows the exact same
+web UI (`index.html`/`app.js`/`main.js`) in its own window, with no
+logic of its own. Tested for Intel Macs from macOS 10.15 (Catalina)
+onward — suitable for older machines too, such as a 2015 MacBook with
+an Intel Core i5.
+
+**The build must run on a Mac** (Xcode command line tools required) —
+it cannot be cross-compiled for macOS from a Linux environment.
+
+One-time setup on the Mac:
+
+```sh
+xcode-select --install        # if not already installed
+curl https://sh.rustup.rs -sSf | sh    # Rust toolchain for Tauri
+```
+
+After that, a single command builds a ready-to-use `.dmg` installer:
+
+```sh
+npm install
+npm run tauri:build
+```
+
+The result lands at
+`src-tauri/target/release/bundle/dmg/KieselWesen_0.1.0_x64.dmg`. Open
+that file by double-clicking and drag the app into the `Applications`
+folder — KieselWesen then starts like any other Mac app, no terminal
+or local server needed.
+
+Since the app is not signed with a paid Apple developer certificate,
+macOS Gatekeeper will warn on first launch. Fix: right-click the app
+in Finder → "Open" and confirm in the dialog (only needed on the very
+first launch).
+
+To develop with a live window instead of a finished installer:
+
+```sh
+npm run tauri:dev
+```
+
 ## License
 
 [PolyForm Noncommercial License 1.0.0](LICENSE).
