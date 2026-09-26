@@ -32,15 +32,32 @@ const OBJECT_ID_BY_CLASS = {
   kiesel: "kieselwesen",
 };
 
-const STORAGE_KEY = "kieselwesen:lokal-vorschau";
+const DEFAULT_RUN_ID = "lokal-vorschau";
+const LEGACY_STORAGE_KEY = "kieselwesen:lokal-vorschau";
+const RUN_STORAGE_PREFIX = "kieselwesen:run:";
+const ACTIVE_RUN_STORAGE_KEY = "kieselwesen:active-run-id";
 const SNAPSHOT_STORAGE_PREFIX = "kieselwesen:snapshot:";
-const BRANCH_STORAGE_PREFIX = "kieselwesen:branch:";
 
-function loadRunFromStorage() {
+function runStorageKey(runId) {
+  return RUN_STORAGE_PREFIX + runId;
+}
+
+/**
+ * Jeder bekannte Lauf (Ursprung wie Abzweigung) liegt unter einem eigenen
+ * Schlüssel. So bleibt der Ursprungslauf beim Anlegen/Aktivieren einer
+ * Abzweigung unangetastet erreichbar, statt von ihr überschrieben zu werden.
+ */
+function loadRunById(runId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return deserializeRun(JSON.parse(raw));
+    const raw = localStorage.getItem(runStorageKey(runId));
+    if (raw) return deserializeRun(JSON.parse(raw));
+    // Migration: Läufe aus früheren Versionen lagen unter einem festen
+    // Einzelschlüssel statt pro Lauf-ID.
+    if (runId === DEFAULT_RUN_ID) {
+      const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacyRaw) return deserializeRun(JSON.parse(legacyRaw));
+    }
+    return null;
   } catch {
     // Privater Modus, defekte Daten o.ä. — startet dann einfach frisch.
     return null;
@@ -49,24 +66,68 @@ function loadRunFromStorage() {
 
 function saveRunToStorage(currentRun) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeRun(currentRun)));
+    localStorage.setItem(runStorageKey(currentRun.runId), JSON.stringify(serializeRun(currentRun)));
+    localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, currentRun.runId);
   } catch {
     // Speicher voll/blockiert — Zustand bleibt dann nur für diese Sitzung erhalten.
   }
 }
 
+function listKnownRunIds() {
+  const ids = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(RUN_STORAGE_PREFIX)) ids.push(key.slice(RUN_STORAGE_PREFIX.length));
+  }
+  if (ids.length === 0 && localStorage.getItem(LEGACY_STORAGE_KEY)) ids.push(DEFAULT_RUN_ID);
+  return ids.sort();
+}
+
+function listKnownSnapshotIds() {
+  const ids = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(SNAPSHOT_STORAGE_PREFIX)) ids.push(key.slice(SNAPSHOT_STORAGE_PREFIX.length));
+  }
+  return ids.sort();
+}
+
+function createFreshRun(runId) {
+  return {
+    runId,
+    seed: "lokal",
+    createdAt: Date.now(),
+    restActive: false,
+    model: createEmptyModel(),
+    log: createEmptyLog(),
+    engineConfig: { params: demoEngineParams, rulesEnabled: allRulesEnabled },
+  };
+}
+
 let world = seedInitialRoom();
-let run = loadRunFromStorage() ?? {
-  runId: "lokal-vorschau",
-  seed: "lokal",
-  createdAt: Date.now(),
-  restActive: false,
-  model: createEmptyModel(),
-  log: createEmptyLog(),
-  engineConfig: { params: demoEngineParams, rulesEnabled: allRulesEnabled },
-};
+const activeRunIdAtStart = localStorage.getItem(ACTIVE_RUN_STORAGE_KEY) ?? DEFAULT_RUN_ID;
+let run = loadRunById(activeRunIdAtStart) ?? createFreshRun(activeRunIdAtStart);
 let eventCounter = run.log.events.length;
 let lastTouchedNodeId = run.log.events.at(-1)?.participants.at(-1) ?? null;
+saveRunToStorage(run);
+
+/**
+ * Wechselt den aktiven Lauf (Ursprung oder eine Abzweigung) auf einen
+ * bereits gespeicherten Lauf. Der bisher aktive Lauf bleibt unter seiner
+ * eigenen runId unverändert erreichbar.
+ */
+function activateRun(runId) {
+  const loaded = loadRunById(runId);
+  if (!loaded) return false;
+  run = loaded;
+  eventCounter = run.log.events.length;
+  lastTouchedNodeId = run.log.events.at(-1)?.participants.at(-1) ?? null;
+  localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, run.runId);
+  updateRestControls();
+  refreshRunSelect();
+  render();
+  return true;
+}
 
 function render() {
   window.KieselWesenUI.update(toUiPayload(run, world));
@@ -181,8 +242,42 @@ const runExportButton = document.getElementById("run-export");
 const runSnapshotButton = document.getElementById("run-snapshot");
 const runBranchButton = document.getElementById("run-branch");
 const runToolsResult = document.getElementById("run-tools-result");
+const runSelect = document.getElementById("run-select");
+const runActivateButton = document.getElementById("run-activate");
+const snapshotSelect = document.getElementById("snapshot-select");
 
-let lastSnapshotId = null;
+function refreshRunSelect() {
+  if (!runSelect) return;
+  const ids = listKnownRunIds();
+  runSelect.replaceChildren(
+    ...ids.map((id) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id === run.runId ? `${id} (aktiv)` : id;
+      return option;
+    }),
+  );
+  runSelect.value = run.runId;
+}
+
+function refreshSnapshotSelect() {
+  if (!snapshotSelect) return;
+  const ids = listKnownSnapshotIds();
+  const previousValue = snapshotSelect.value;
+  snapshotSelect.replaceChildren(
+    ...ids.map((id) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id;
+      return option;
+    }),
+  );
+  if (ids.includes(previousValue)) snapshotSelect.value = previousValue;
+  if (runBranchButton) runBranchButton.disabled = ids.length === 0;
+}
+
+refreshRunSelect();
+refreshSnapshotSelect();
 
 runExportButton?.addEventListener("click", () => {
   const json = exportRunAsJson(run);
@@ -201,24 +296,38 @@ runExportButton?.addEventListener("click", () => {
 runSnapshotButton?.addEventListener("click", () => {
   const snapshotId = `s${Date.now()}`;
   localStorage.setItem(SNAPSHOT_STORAGE_PREFIX + snapshotId, JSON.stringify(serializeRun(run)));
-  lastSnapshotId = snapshotId;
-  if (runBranchButton) runBranchButton.disabled = false;
+  refreshSnapshotSelect();
+  if (snapshotSelect) snapshotSelect.value = snapshotId;
   if (runToolsResult) runToolsResult.textContent = `Snapshot "${snapshotId}" von Lauf "${run.runId}" angelegt (${run.model.nodes.size} Knoten).`;
 });
 
 runBranchButton?.addEventListener("click", () => {
-  if (!lastSnapshotId) return;
-  const raw = localStorage.getItem(SNAPSHOT_STORAGE_PREFIX + lastSnapshotId);
+  const selectedSnapshotId = snapshotSelect?.value;
+  if (!selectedSnapshotId) return;
+  const raw = localStorage.getItem(SNAPSHOT_STORAGE_PREFIX + selectedSnapshotId);
   if (!raw) return;
   const snapshot = deserializeRun(JSON.parse(raw));
+  const originRunId = run.runId;
   const branchRunId = `branch-${Date.now()}`;
   const branch = branchFromSnapshot(snapshot, branchRunId, Date.now());
-  localStorage.setItem(BRANCH_STORAGE_PREFIX + branchRunId, JSON.stringify(serializeRun(branch)));
+  localStorage.setItem(runStorageKey(branch.runId), JSON.stringify(serializeRun(branch)));
+  // Die Abzweigung wird zur tatsächlich aktiven Instanz — der Ursprungslauf
+  // bleibt unter seiner eigenen runId unverändert gespeichert und über den
+  // Lauf-Wähler jederzeit wieder erreichbar.
+  activateRun(branch.runId);
   if (runToolsResult) {
     runToolsResult.textContent =
-      `Abzweigung "${branch.runId}" aus Snapshot "${lastSnapshotId}" erstellt ` +
+      `Abzweigung "${branch.runId}" aus Snapshot "${selectedSnapshotId}" erstellt und aktiviert ` +
       `(abgezweigt von "${branch.branchedFromRunId}", ${branch.model.nodes.size} Knoten). ` +
-      `Ursprungslauf "${run.runId}" bleibt unverändert.`;
+      `Ursprungslauf "${originRunId}" bleibt unverändert und ist über "Lauf wechseln" erreichbar.`;
+  }
+});
+
+runActivateButton?.addEventListener("click", () => {
+  const targetRunId = runSelect?.value;
+  if (!targetRunId || targetRunId === run.runId) return;
+  if (activateRun(targetRunId) && runToolsResult) {
+    runToolsResult.textContent = `Lauf "${targetRunId}" ist jetzt aktiv.`;
   }
 });
 

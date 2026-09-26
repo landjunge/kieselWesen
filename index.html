@@ -53,8 +53,13 @@
         <p class="run-intro">Aktuellen Lauf als lesbare Datei exportieren, einen Snapshot anlegen und daraus eine neue Abzweigung starten, ohne den Ursprungslauf zu überschreiben.</p>
         <div class="run-controls" role="group" aria-label="Lauf-Werkzeuge">
           <button type="button" id="run-export">Lauf exportieren</button>
+          <label>Snapshot: <select id="snapshot-select" aria-label="Snapshot auswählen"></select></label>
           <button type="button" id="run-snapshot">Snapshot anlegen</button>
           <button type="button" id="run-branch" disabled>Aus Snapshot abzweigen</button>
+        </div>
+        <div class="run-controls" role="group" aria-label="Lauf wechseln">
+          <label>Lauf: <select id="run-select" aria-label="Lauf auswählen"></select></label>
+          <button type="button" id="run-activate">Lauf wechseln</button>
         </div>
         <div id="run-tools-result" aria-live="polite"><p>Noch kein Snapshot angelegt.</p></div>
       </div>
