@@ -11,14 +11,19 @@ import {
   createEmptyLog,
   createEmptyModel,
   createInstances,
+  addSuggestion,
+  confirmSuggestion,
   createNode,
+  createOllamaClient,
   demoEngineParams,
   deserializeRun,
   ensureEdge,
   exportRunAsJson,
   getLearner,
+  getSuggestions,
   learnTransition,
   predictNext,
+  rejectSuggestion,
   replaySequence,
   runRestStep,
   seedInitialRoom,
@@ -130,6 +135,7 @@ function activateRun(runId) {
   refreshRunSelect();
   render();
   renderLearnerPanel();
+  renderSuggestionsPanel();
   return true;
 }
 
@@ -223,8 +229,134 @@ function renderLearnerPanel() {
   container.append(list);
 }
 
+/**
+ * Vorschläge eines austauschbaren, lokalen LLM (Ollama). Ein Vorschlag
+ * verändert Kiesels echtes Wissen (den Mini-Lerner) NIE von selbst — er
+ * bleibt "unbestätigt", bis ein Mensch ihn per Klick bestätigt oder
+ * verwirft. Nur eine Bestätigung erzeugt einen echten Lernschritt,
+ * identisch zu einem selbst beobachteten Übergang (touchObject oben).
+ */
+const LLM_MODEL_STORAGE_KEY = "kieselwesen:llm-model";
+const DEFAULT_LLM_MODEL = "llama3.2:3b";
+let suggestionCounter = 0;
+
+function currentLlmModelName() {
+  return localStorage.getItem(LLM_MODEL_STORAGE_KEY) ?? DEFAULT_LLM_MODEL;
+}
+
+const llmModelInput = document.getElementById("llm-model");
+const llmSuggestButton = document.getElementById("llm-suggest");
+const suggestionsResult = document.getElementById("suggestions-result");
+
+if (llmModelInput) llmModelInput.value = currentLlmModelName();
+
+llmModelInput?.addEventListener("change", () => {
+  const value = llmModelInput.value.trim();
+  if (value) localStorage.setItem(LLM_MODEL_STORAGE_KEY, value);
+});
+
+async function requestLlmSuggestion() {
+  if (!lastTouchedNodeId) return;
+  const modelName = currentLlmModelName();
+  const client = createOllamaClient(modelName);
+  const knownNodeIds = [...run.model.nodes.keys()];
+  const prompt =
+    `Bekannte Knoten: ${knownNodeIds.join(", ")}. ` +
+    `Zuletzt berührter Knoten: "${lastTouchedNodeId}". ` +
+    `Welcher bekannte Knoten folgt darauf am wahrscheinlichsten? Antworte nur mit der Knoten-ID.`;
+
+  if (suggestionsResult) {
+    const pending = document.createElement("p");
+    pending.textContent = `Frage Modell "${modelName}"...`;
+    suggestionsResult.append(pending);
+  }
+
+  try {
+    const text = await client.suggest(prompt);
+    const matchedToId = knownNodeIds.find((id) => text.trim().toLowerCase().includes(id.toLowerCase()));
+    suggestionCounter += 1;
+    run.suggestions = addSuggestion(getSuggestions(run), {
+      id: `sugg${suggestionCounter}`,
+      createdAt: Date.now(),
+      fromId: lastTouchedNodeId,
+      toId: matchedToId ?? text.trim(),
+      text,
+      modelName,
+    });
+    saveRunToStorage(run);
+  } catch (error) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = `Anfrage an "${modelName}" fehlgeschlagen: ${error.message}`;
+      suggestionsResult.append(message);
+    }
+  }
+  renderSuggestionsPanel();
+}
+
+llmSuggestButton?.addEventListener("click", () => {
+  requestLlmSuggestion();
+});
+
+function confirmSuggestionById(suggestionId) {
+  const suggestion = getSuggestions(run).items.find((item) => item.id === suggestionId);
+  if (!suggestion || suggestion.status !== "pending") return;
+  // Bestätigung erzeugt denselben echten Lernschritt wie eine selbst
+  // beobachtete Erfahrung (siehe touchObject) — keine Extra-Wissensquelle.
+  run.learner = learnTransition(getLearner(run), suggestion.fromId, suggestion.toId);
+  run.suggestions = confirmSuggestion(getSuggestions(run), suggestionId);
+  saveRunToStorage(run);
+  renderSuggestionsPanel();
+  renderLearnerPanel();
+}
+
+function rejectSuggestionById(suggestionId) {
+  run.suggestions = rejectSuggestion(getSuggestions(run), suggestionId);
+  saveRunToStorage(run);
+  renderSuggestionsPanel();
+}
+
+function renderSuggestionsPanel() {
+  if (!suggestionsResult) return;
+  suggestionsResult.replaceChildren();
+
+  const items = getSuggestions(run).items;
+  if (items.length === 0) {
+    const message = document.createElement("p");
+    message.textContent = "Noch kein Vorschlag angefragt.";
+    suggestionsResult.append(message);
+    return;
+  }
+
+  const list = document.createElement("ul");
+  for (const suggestion of [...items].reverse()) {
+    const item = document.createElement("li");
+    const summary = document.createElement("p");
+    summary.textContent = `[${suggestion.modelName}] "${suggestion.fromId}" → "${suggestion.toId}" (${suggestion.status}): ${suggestion.text}`;
+    item.append(summary);
+
+    if (suggestion.status === "pending") {
+      const confirmButton = document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.textContent = "Bestätigen";
+      confirmButton.addEventListener("click", () => confirmSuggestionById(suggestion.id));
+
+      const rejectButton = document.createElement("button");
+      rejectButton.type = "button";
+      rejectButton.textContent = "Verwerfen";
+      rejectButton.addEventListener("click", () => rejectSuggestionById(suggestion.id));
+
+      item.append(confirmButton, rejectButton);
+    }
+
+    list.append(item);
+  }
+  suggestionsResult.append(list);
+}
+
 render();
 renderLearnerPanel();
+renderSuggestionsPanel();
 
 /**
  * Ruhephase (Bauplan Phase 8): klare Ereignisgrenze beim Wechsel, ein

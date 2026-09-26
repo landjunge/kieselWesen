@@ -1,4 +1,5 @@
 import type { EngineConfig } from "./experimentEngine.js";
+import { createEmptySuggestions, type SuggestionState } from "./llmSuggestions.js";
 import {
   createEmptyLearner,
   deserializeLearner,
@@ -31,6 +32,14 @@ export interface RunState {
    * es, gilt ein leerer Lerner (siehe getLearner()).
    */
   learner?: LearnerState;
+  /**
+   * Unbestätigte/bestätigte/verworfene Vorschläge eines austauschbaren,
+   * lokalen LLM (siehe llmSuggestions.ts). Bereits JSON-sicher, daher ohne
+   * eigene Serialisierungsfunktion. Nur bestätigte Vorschläge haben je
+   * einen entsprechenden Lernschritt im Lerner ausgelöst — dieses Feld
+   * ist reine Historie/Anzeige, keine zusätzliche Wissensquelle.
+   */
+  suggestions?: SuggestionState;
 }
 
 export interface SerializedRun {
@@ -44,11 +53,17 @@ export interface SerializedRun {
   log: EventLog;
   engineConfig: EngineConfig;
   learner?: SerializedLearnerState;
+  suggestions?: SuggestionState;
 }
 
 /** Liefert den Lerner eines Laufs, oder einen leeren, falls (noch) keiner vorhanden ist. */
 export function getLearner(run: RunState): LearnerState {
   return run.learner ?? createEmptyLearner();
+}
+
+/** Liefert die Vorschläge eines Laufs, oder einen leeren Zustand, falls (noch) keiner vorhanden ist. */
+export function getSuggestions(run: RunState): SuggestionState {
+  return run.suggestions ?? createEmptySuggestions();
 }
 
 export function serializeRun(run: RunState): SerializedRun {
@@ -63,6 +78,7 @@ export function serializeRun(run: RunState): SerializedRun {
     log: run.log,
     engineConfig: run.engineConfig,
     learner: run.learner ? serializeLearner(run.learner) : undefined,
+    suggestions: run.suggestions,
   };
 }
 
@@ -83,6 +99,7 @@ export function deserializeRun(data: SerializedRun): RunState {
     log: data.log,
     engineConfig: data.engineConfig,
     learner: data.learner ? deserializeLearner(data.learner) : undefined,
+    suggestions: data.suggestions,
   };
 }
 
