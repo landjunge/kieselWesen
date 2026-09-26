@@ -101,14 +101,21 @@ zu bauen:
 
 ```sh
 npm install
-npm run tauri:build
+npm run package:dmg
 ```
 
 Das Ergebnis liegt danach unter
-`src-tauri/target/release/bundle/dmg/KieselWesen_0.1.0_x64.dmg`. Diese
-Datei per Doppelklick öffnen und die App in den `Programme`-Ordner
-ziehen — danach startet KieselWesen wie jede andere Mac-App, ganz ohne
-Terminal oder lokalen Server.
+`src-tauri/target/release/bundle/dmg/KieselWesen.dmg`. Diese Datei per
+Doppelklick öffnen und die App in den `Programme`-Ordner ziehen —
+danach startet KieselWesen wie jede andere Mac-App, ganz ohne Terminal
+oder lokalen Server.
+
+(`npm run package:dmg` baut die App und packt sie danach mit einem
+eigenen, einfachen `hdiutil`-Skript in eine `.dmg` — nicht mit Tauris
+eingebautem `.dmg`-Bundler, der auf manchen macOS-Versionen mit "Not
+enough arguments" abbricht. Reicht dir die reine `.app`-Datei ohne
+`.dmg`-Verpackung, genügt `npm run tauri:build`; sie liegt dann unter
+`src-tauri/target/release/bundle/macos/KieselWesen.app`.)
 
 Da die App nicht mit einem kostenpflichtigen Apple-Entwicklerzertifikat
 signiert ist, warnt macOS Gatekeeper beim ersten Start. Abhilfe: im
