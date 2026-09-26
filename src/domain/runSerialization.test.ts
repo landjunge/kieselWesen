@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { appendEvent, createEmptyLog } from "./eventLog.js";
 import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
+import { addSuggestion, createEmptySuggestions } from "./llmSuggestions.js";
 import { createEmptyLearner, learnTransition, predictNext } from "./miniLearner.js";
 import {
   branchFromSnapshot,
   deserializeRun,
   exportRunAsJson,
   getLearner,
+  getSuggestions,
   serializeRun,
   type RunState,
 } from "./runSerialization.js";
@@ -112,5 +114,33 @@ describe("Lauf-Serialisierung — Mini-Lerner bleibt erhalten", () => {
 
     const restoredFromExport = deserializeRun(JSON.parse(exportRunAsJson(run)));
     expect(predictNext(getLearner(restoredFromExport), "n1")).toEqual(predictNext(getLearner(run), "n1"));
+  });
+});
+
+describe("Lauf-Serialisierung — LLM-Vorschläge bleiben erhalten", () => {
+  it("getSuggestions liefert einen leeren Zustand, wenn keiner gesetzt ist", () => {
+    const run = seedRun("run-a");
+    expect(getSuggestions(run)).toEqual(createEmptySuggestions());
+  });
+
+  it("gesetzte Vorschläge überstehen Serialisierung/Export unverändert", () => {
+    let run = seedRun("run-a");
+    run = {
+      ...run,
+      suggestions: addSuggestion(createEmptySuggestions(), {
+        id: "s1",
+        createdAt: 1,
+        fromId: "n1",
+        toId: "n2",
+        text: "Vielleicht führt n1 oft zu n2.",
+        modelName: "llama3.2:3b",
+      }),
+    };
+
+    const restored = deserializeRun(serializeRun(run));
+    expect(getSuggestions(restored)).toEqual(getSuggestions(run));
+
+    const restoredFromExport = deserializeRun(JSON.parse(exportRunAsJson(run)));
+    expect(getSuggestions(restoredFromExport)).toEqual(getSuggestions(run));
   });
 });

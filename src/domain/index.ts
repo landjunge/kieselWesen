@@ -8,3 +8,5 @@ export * from "./uiAdapter.js";
 export * from "./persistence.js";
 export * from "./compare.js";
 export * from "./miniLearner.js";
+export * from "./llmSuggestions.js";
+export * from "../llm/ollamaClient.js";

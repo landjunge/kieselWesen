@@ -580,3 +580,74 @@ describe("E2E — Mini-Lerner lernt echte Übergänge (eigenes Modell, kein exte
     await page.context().close();
   });
 });
+
+describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigung", () => {
+  it("zeigt vor der ersten Anfrage noch keinen Vorschlag", async () => {
+    const { page } = await freshPage();
+    await page.click("#tab-suggestions");
+    const resultText = await page.locator("#suggestions-result").textContent();
+    expect(resultText).toContain("Noch kein Vorschlag angefragt");
+    await page.context().close();
+  });
+
+  it("ein Vorschlag bleibt unbestätigt und verändert den Mini-Lerner nicht, bis er bestätigt wird", async () => {
+    const { page } = await freshPage();
+    // Lokales Ollama simulieren, ohne eine echte Instanz zu benötigen.
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      await route.fulfill({ json: { response: "cat" } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    const beforeConfirm = await page.locator("#suggestions-result").textContent();
+    expect(beforeConfirm).toContain("plant");
+    expect(beforeConfirm).toContain("cat");
+    expect(beforeConfirm).toContain("pending");
+
+    await page.click("#tab-learner");
+    const learnerBeforeConfirm = await page.locator("#learner-result").textContent();
+    expect(learnerBeforeConfirm).toContain("Noch kein gelernter Übergang");
+
+    await page.click("#tab-suggestions");
+    await page.click("#suggestions-result button:has-text('Bestätigen')");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("confirmed") ?? false,
+    );
+
+    await page.click("#tab-learner");
+    const learnerAfterConfirm = await page.locator("#learner-result").textContent();
+    expect(learnerAfterConfirm).toMatch(/cat:\s*\d+\s*%/);
+    await page.context().close();
+  });
+
+  it("ein verworfener Vorschlag verändert den Mini-Lerner nicht", async () => {
+    const { page } = await freshPage();
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      await route.fulfill({ json: { response: "cat" } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    await page.click("#suggestions-result button:has-text('Verwerfen')");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("rejected") ?? false,
+    );
+
+    await page.click("#tab-learner");
+    const learnerText = await page.locator("#learner-result").textContent();
+    expect(learnerText).toContain("Noch kein gelernter Übergang");
+    await page.context().close();
+  });
+});
