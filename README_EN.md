@@ -96,14 +96,21 @@ After that, a single command builds a ready-to-use `.dmg` installer:
 
 ```sh
 npm install
-npm run tauri:build
+npm run package:dmg
 ```
 
 The result lands at
-`src-tauri/target/release/bundle/dmg/KieselWesen_0.1.0_x64.dmg`. Open
-that file by double-clicking and drag the app into the `Applications`
-folder — KieselWesen then starts like any other Mac app, no terminal
-or local server needed.
+`src-tauri/target/release/bundle/dmg/KieselWesen.dmg`. Open that file
+by double-clicking and drag the app into the `Applications` folder —
+KieselWesen then starts like any other Mac app, no terminal or local
+server needed.
+
+(`npm run package:dmg` builds the app and then packs it into a `.dmg`
+with a small, self-contained `hdiutil` script — not Tauri's built-in
+`.dmg` bundler, which fails with "Not enough arguments" on some macOS
+versions. If the plain `.app` without `.dmg` packaging is enough,
+`npm run tauri:build` alone is sufficient; it lands at
+`src-tauri/target/release/bundle/macos/KieselWesen.app`.)
 
 Since the app is not signed with a paid Apple developer certificate,
 macOS Gatekeeper will warn on first launch. Fix: right-click the app
