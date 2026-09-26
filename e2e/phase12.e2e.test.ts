@@ -295,42 +295,73 @@ describe("E2E — Lauf-Werkzeuge über echte Bedienelemente (Export, Snapshot, A
     await page.context().close();
   });
 
-  it("Snapshot anlegen und daraus abzweigen lässt den Ursprungslauf unverändert", async () => {
+  it("Abzweigung wird zur tatsächlich aktiven Instanz; Ursprung bleibt unverändert erreichbar, auch nach Neuladen", async () => {
     const { page } = await freshPage();
     await page.click(".plant");
     await page.waitForTimeout(100);
     await page.click(".cat");
     await page.waitForTimeout(150);
+    const originRunId = await page.evaluate(() => window.KieselWesenDebug.getRun().runId);
+    const originEventBefore = await page.textContent("#current-event");
 
-    const originBefore = await page.evaluate(() => JSON.parse(localStorage.getItem("kieselwesen:lokal-vorschau")!));
-
+    // Snapshot anlegen und daraus abzweigen.
     await page.click("#tab-run");
     expect(await page.isDisabled("#run-branch")).toBe(true);
     await page.click("#run-snapshot");
-    const snapshotResult = await page.locator("#run-tools-result").textContent();
-    expect(snapshotResult).toContain("Snapshot");
-    expect(snapshotResult).toContain("angelegt");
+    expect(await page.locator("#run-tools-result").textContent()).toContain("angelegt");
     expect(await page.isDisabled("#run-branch")).toBe(false);
-
     await page.click("#run-branch");
     const branchResult = await page.locator("#run-tools-result").textContent();
-    expect(branchResult).toContain("Abzweigung");
+    expect(branchResult).toContain("erstellt und aktiviert");
     expect(branchResult).toContain("abgezweigt von");
     expect(branchResult).toContain("unverändert");
 
-    const branchKeys = await page.evaluate(() =>
-      Object.keys(localStorage).filter((key) => key.startsWith("kieselwesen:branch:")),
-    );
-    expect(branchKeys.length).toBe(1);
-    const branch = await page.evaluate(
-      (key) => JSON.parse(localStorage.getItem(key)!),
-      branchKeys[0],
-    );
-    expect(branch.branchedFromRunId).toBe("lokal-vorschau");
-    expect(branch.nodes.length).toBe(2);
+    // Die neue Instanz ist jetzt die tatsächlich aktive — eindeutig sichtbar
+    // im Zustand (Box 2), nicht nur in einem separaten Speicher-Schlüssel.
+    const activeRunIdAfterBranch = await page.evaluate(() => window.KieselWesenDebug.getRun().runId);
+    expect(activeRunIdAfterBranch).not.toBe(originRunId);
+    const stateText = await page.locator("#state-list").textContent();
+    expect(stateText).toContain(activeRunIdAfterBranch);
 
-    const originAfter = await page.evaluate(() => JSON.parse(localStorage.getItem("kieselwesen:lokal-vorschau")!));
-    expect(originAfter).toEqual(originBefore);
+    // Weltaktion auf der Abzweigung auslösen — wirkt nur dort.
+    await page.click(".kiesel");
+    await page.waitForTimeout(150);
+    const branchEventAfterTouch = await page.textContent("#current-event");
+    expect(branchEventAfterTouch).toContain("KieselWesen berührt");
+    const branchNodeCountAfterTouch = await page.evaluate(() => window.KieselWesenDebug.getRun().model.nodes.size);
+    expect(branchNodeCountAfterTouch).toBe(3);
+
+    // Zurück zum Ursprung wechseln: unverändert, keine dritte Berührung.
+    await page.selectOption("#run-select", originRunId);
+    await page.click("#run-activate");
+    await page.waitForTimeout(100);
+    const originRunIdAfterSwitch = await page.evaluate(() => window.KieselWesenDebug.getRun().runId);
+    expect(originRunIdAfterSwitch).toBe(originRunId);
+    const originNodeCountAfterSwitch = await page.evaluate(() => window.KieselWesenDebug.getRun().model.nodes.size);
+    expect(originNodeCountAfterSwitch).toBe(2);
+    const originEventAfterSwitch = await page.textContent("#current-event");
+    expect(originEventAfterSwitch).toBe(originEventBefore);
+
+    // Neu laden: beide Läufe bleiben über den Lauf-Wähler auswählbar, mit
+    // korrektem, unterschiedlichem Zustand.
+    await page.reload();
+    await page.waitForTimeout(300);
+    await page.click("#tab-run");
+    const optionValues = await page.locator("#run-select option").evaluateAll((opts) => opts.map((o) => o.getAttribute("value")));
+    expect(optionValues).toContain(originRunId);
+    expect(optionValues).toContain(activeRunIdAfterBranch);
+
+    // Nach Reload ist der zuletzt aktive Lauf (Ursprung) wieder geladen.
+    expect(await page.evaluate(() => window.KieselWesenDebug.getRun().runId)).toBe(originRunId);
+    expect(await page.evaluate(() => window.KieselWesenDebug.getRun().model.nodes.size)).toBe(2);
+
+    // Zur Abzweigung zurückwechseln und ihren Zustand nach Reload bestätigen.
+    await page.selectOption("#run-select", activeRunIdAfterBranch);
+    await page.click("#run-activate");
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => window.KieselWesenDebug.getRun().runId)).toBe(activeRunIdAfterBranch);
+    expect(await page.evaluate(() => window.KieselWesenDebug.getRun().model.nodes.size)).toBe(3);
+
     await page.context().close();
   });
 });
