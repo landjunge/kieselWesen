@@ -593,6 +593,9 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
   it("ein Vorschlag bleibt unbestätigt und verändert den Mini-Lerner nicht, bis er bestätigt wird", async () => {
     const { page } = await freshPage();
     // Lokales Ollama simulieren, ohne eine echte Instanz zu benötigen.
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
     await page.route("http://localhost:11434/api/generate", async (route) => {
       await route.fulfill({ json: { response: "cat" } });
     });
@@ -600,6 +603,9 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     await page.click(".plant");
     await page.waitForTimeout(80);
     await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
     await page.click("#llm-suggest");
     await page.waitForFunction(
       () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
@@ -628,6 +634,9 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
 
   it("ein verworfener Vorschlag verändert den Mini-Lerner nicht", async () => {
     const { page } = await freshPage();
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
     await page.route("http://localhost:11434/api/generate", async (route) => {
       await route.fulfill({ json: { response: "cat" } });
     });
@@ -635,6 +644,9 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     await page.click(".plant");
     await page.waitForTimeout(80);
     await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
     await page.click("#llm-suggest");
     await page.waitForFunction(
       () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
@@ -652,8 +664,8 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
   });
 });
 
-describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle", () => {
-  it("ohne hinterlegten API-Schlüssel wird keine Anfrage gestellt", async () => {
+describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle (Anbieter/Modell aus echter Liste, kein Raten)", () => {
+  it("ohne Anbieter/Schlüssel wird keine Anfrage gestellt", async () => {
     const { page } = await freshPage();
     let requestSent = false;
     await page.route("https://api.anthropic.com/v1/messages", async (route) => {
@@ -666,15 +678,18 @@ describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle", 
     await page.click("#tab-suggestions");
     await page.click("#cloud-suggest");
     await page.waitForFunction(
-      () => document.querySelector("#suggestions-result")?.textContent?.includes("API-Schlüssel") ?? false,
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("Anbieter") ?? false,
     );
 
     expect(requestSent).toBe(false);
     await page.context().close();
   });
 
-  it("mit API-Schlüssel liefert das Cloud-Modell einen Vorschlag, der erst nach Bestätigung lernt", async () => {
+  it("Anthropic: Modellliste wird vom Anbieter geladen, kein Modell ist vorausgewählt", async () => {
     const { page } = await freshPage();
+    await page.route("https://api.anthropic.com/v1/models", async (route) => {
+      await route.fulfill({ json: { data: [{ id: "claude-sonnet-5" }, { id: "claude-opus-5-5" }] } });
+    });
     await page.route("https://api.anthropic.com/v1/messages", async (route) => {
       await route.fulfill({ json: { content: [{ type: "text", text: "cat" }] } });
     });
@@ -682,8 +697,18 @@ describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle", 
     await page.click(".plant");
     await page.waitForTimeout(80);
     await page.click("#tab-suggestions");
+    await page.selectOption("#cloud-provider", "anthropic");
     await page.fill("#cloud-api-key", "sk-ant-test-key");
     await page.dispatchEvent("#cloud-api-key", "change");
+
+    const initialSelection = await page.locator("#cloud-model").inputValue();
+    expect(initialSelection).toBe("");
+
+    await page.click("#cloud-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#cloud-model")?.textContent?.includes("claude-opus-5-5") ?? false);
+    expect(await page.locator("#cloud-model").inputValue()).toBe("");
+
+    await page.selectOption("#cloud-model", "claude-sonnet-5");
     await page.click("#cloud-suggest");
     await page.waitForFunction(
       () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
@@ -707,6 +732,38 @@ describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle", 
     await page.click("#tab-learner");
     const learnerAfterConfirm = await page.locator("#learner-result").textContent();
     expect(learnerAfterConfirm).toMatch(/cat:\s*\d+\s*%/);
+    await page.context().close();
+  });
+
+  it("OpenAI-kompatibel (z.B. DeepSeek): eigene Adresse, Modellliste kommt vom angegebenen Anbieter", async () => {
+    const { page } = await freshPage();
+    await page.route("https://api.deepseek.com/models", async (route) => {
+      await route.fulfill({ json: { data: [{ id: "deepseek-chat" }, { id: "deepseek-reasoner" }] } });
+    });
+    await page.route("https://api.deepseek.com/chat/completions", async (route) => {
+      await route.fulfill({ json: { choices: [{ message: { content: "cat" } }] } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.selectOption("#cloud-provider", "openai-compatible");
+    expect(await page.locator("#cloud-base-url-field").isVisible()).toBe(true);
+    await page.fill("#cloud-base-url", "https://api.deepseek.com");
+    await page.dispatchEvent("#cloud-base-url", "change");
+    await page.fill("#cloud-api-key", "sk-deepseek-test-key");
+    await page.dispatchEvent("#cloud-api-key", "change");
+
+    await page.click("#cloud-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#cloud-model")?.textContent?.includes("deepseek-chat") ?? false);
+    await page.selectOption("#cloud-model", "deepseek-chat");
+    await page.click("#cloud-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    const beforeConfirm = await page.locator("#suggestions-result").textContent();
+    expect(beforeConfirm).toContain("deepseek-chat");
     await page.context().close();
   });
 });

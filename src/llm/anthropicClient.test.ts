@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAnthropicClient } from "./anthropicClient.js";
+import { createAnthropicClient, listAnthropicModels } from "./anthropicClient.js";
 
 describe("Anthropic-Client — großes, externes Modell als zweite, getrennte Quelle", () => {
   afterEach(() => {
@@ -64,5 +64,28 @@ describe("Anthropic-Client — großes, externes Modell als zweite, getrennte Qu
     );
     const client = createAnthropicClient("sk-test-key", "claude-sonnet-5");
     expect(await client.suggest("Frage")).toBe("");
+  });
+
+  it("listAnthropicModels liefert die mit diesem Schlüssel verfügbaren Modell-IDs — kein Raten nötig", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({ data: [{ id: "claude-sonnet-5" }, { id: "claude-opus-5-5" }] }),
+      text: async () => "",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const models = await listAnthropicModels("sk-test-key");
+    expect(models).toEqual(["claude-sonnet-5", "claude-opus-5-5"]);
+    const [, init] = fetchMock.mock.calls[0];
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers["x-api-key"]).toBe("sk-test-key");
+  });
+
+  it("listAnthropicModels wirft einen Fehler bei ungültigem Schlüssel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 401, text: async () => "ungültiger API-Key" })),
+    );
+    await expect(listAnthropicModels("sk-invalid")).rejects.toThrow(/Anthropic-Modellliste fehlgeschlagen/);
   });
 });

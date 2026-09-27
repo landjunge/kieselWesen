@@ -33,3 +33,18 @@ export function createOllamaClient(modelName: string, options: OllamaClientOptio
     },
   };
 }
+
+/**
+ * Fragt Ollama selbst, welche Modelle tatsächlich installiert sind — statt
+ * dass der Mensch einen Modellnamen erraten/eintippen muss. Leere Liste,
+ * wenn Ollama nicht läuft oder nichts installiert ist.
+ */
+export async function listOllamaModels(options: OllamaClientOptions = {}): Promise<string[]> {
+  const baseUrl = options.baseUrl ?? "http://localhost:11434";
+  const response = await fetch(`${baseUrl}/api/tags`);
+  if (!response.ok) {
+    throw new Error(`Ollama-Modellliste fehlgeschlagen (${response.status}): ${await response.text()}`);
+  }
+  const data = (await response.json()) as { models?: { name: string }[] };
+  return (data.models ?? []).map((model) => model.name);
+}

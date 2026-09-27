@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOllamaClient } from "./ollamaClient.js";
+import { createOllamaClient, listOllamaModels } from "./ollamaClient.js";
 
 describe("Ollama-Client — austauschbares lokales LLM", () => {
   afterEach(() => {
@@ -61,5 +61,33 @@ describe("Ollama-Client — austauschbares lokales LLM", () => {
     const client = createOllamaClient("llama3.2:3b", { baseUrl: "http://localhost:9999" });
     await client.suggest("Frage");
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:9999/api/generate", expect.anything());
+  });
+
+  it("listOllamaModels liefert die tatsächlich installierten Modellnamen — kein Raten nötig", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ models: [{ name: "llama3.2:3b" }, { name: "mistral:7b" }] }),
+        text: async () => "",
+      })),
+    );
+    expect(await listOllamaModels()).toEqual(["llama3.2:3b", "mistral:7b"]);
+  });
+
+  it("listOllamaModels liefert eine leere Liste, wenn nichts installiert ist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ models: [] }), text: async () => "" })),
+    );
+    expect(await listOllamaModels()).toEqual([]);
+  });
+
+  it("listOllamaModels wirft einen Fehler, wenn Ollama nicht erreichbar ist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500, text: async () => "nicht erreichbar" })),
+    );
+    await expect(listOllamaModels()).rejects.toThrow(/Ollama-Modellliste fehlgeschlagen/);
   });
 });
