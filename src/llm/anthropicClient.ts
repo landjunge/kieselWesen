@@ -47,3 +47,23 @@ export function createAnthropicClient(
     },
   };
 }
+
+/**
+ * Fragt die Anthropic-API selbst, welche Modelle mit diesem Schlüssel
+ * verfügbar sind — statt dass der Mensch einen Modellnamen erraten muss.
+ */
+export async function listAnthropicModels(apiKey: string, options: AnthropicClientOptions = {}): Promise<string[]> {
+  const baseUrl = options.baseUrl ?? "https://api.anthropic.com";
+  const response = await fetch(`${baseUrl}/v1/models`, {
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Anthropic-Modellliste fehlgeschlagen (${response.status}): ${await response.text()}`);
+  }
+  const data = (await response.json()) as { data?: { id: string }[] };
+  return (data.data ?? []).map((model) => model.id);
+}

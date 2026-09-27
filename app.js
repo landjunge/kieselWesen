@@ -16,6 +16,7 @@ import {
   createAnthropicClient,
   createNode,
   createOllamaClient,
+  createOpenAiCompatibleClient,
   demoEngineParams,
   deserializeRun,
   ensureEdge,
@@ -23,6 +24,9 @@ import {
   getLearner,
   getSuggestions,
   learnTransition,
+  listAnthropicModels,
+  listOllamaModels,
+  listOpenAiCompatibleModels,
   predictNext,
   rejectSuggestion,
   replaySequence,
@@ -241,51 +245,102 @@ function renderLearnerPanel() {
  * Übergang (touchObject oben). Ein großes Modell kann sich genauso irren
  * wie ein kleines — deshalb dieselbe Kontrolle für beide.
  */
-const LLM_MODEL_STORAGE_KEY = "kieselwesen:llm-model";
-const DEFAULT_LLM_MODEL = "llama3.2:3b";
-const CLOUD_MODEL_STORAGE_KEY = "kieselwesen:llm-cloud-model";
+/**
+ * Kein Modellname zum Raten/Eintippen: die App fragt Ollama bzw. den
+ * gewählten Cloud-Anbieter selbst, welche Modelle tatsächlich verfügbar
+ * sind, und zeigt sie als Liste zum Auswählen — ohne Vorauswahl. Nur der
+ * API-Schlüssel und (bei einem OpenAI-kompatiblen Anbieter) dessen Adresse
+ * müssen von Hand eingegeben werden, weil die App die nicht erraten kann.
+ */
+const CLOUD_PROVIDER_STORAGE_KEY = "kieselwesen:llm-cloud-provider";
+const CLOUD_BASE_URL_STORAGE_KEY = "kieselwesen:llm-cloud-base-url";
 const CLOUD_API_KEY_STORAGE_KEY = "kieselwesen:llm-cloud-apikey";
-const DEFAULT_CLOUD_MODEL = "claude-sonnet-5";
 let suggestionCounter = 0;
 
-function currentLlmModelName() {
-  return localStorage.getItem(LLM_MODEL_STORAGE_KEY) ?? DEFAULT_LLM_MODEL;
-}
-
-function currentCloudModelName() {
-  return localStorage.getItem(CLOUD_MODEL_STORAGE_KEY) ?? DEFAULT_CLOUD_MODEL;
-}
-
-function currentCloudApiKey() {
-  return localStorage.getItem(CLOUD_API_KEY_STORAGE_KEY) ?? "";
-}
-
-const llmModelInput = document.getElementById("llm-model");
+const llmModelSelect = document.getElementById("llm-model");
+const llmRefreshModelsButton = document.getElementById("llm-refresh-models");
 const llmSuggestButton = document.getElementById("llm-suggest");
-const cloudModelInput = document.getElementById("cloud-model");
+const cloudProviderSelect = document.getElementById("cloud-provider");
+const cloudBaseUrlField = document.getElementById("cloud-base-url-field");
+const cloudBaseUrlInput = document.getElementById("cloud-base-url");
 const cloudApiKeyInput = document.getElementById("cloud-api-key");
+const cloudRefreshModelsButton = document.getElementById("cloud-refresh-models");
+const cloudModelSelect = document.getElementById("cloud-model");
 const cloudSuggestButton = document.getElementById("cloud-suggest");
 const suggestionsResult = document.getElementById("suggestions-result");
 
-if (llmModelInput) llmModelInput.value = currentLlmModelName();
-if (cloudModelInput) cloudModelInput.value = currentCloudModelName();
-if (cloudApiKeyInput) cloudApiKeyInput.value = currentCloudApiKey();
+function fillModelSelect(select, models) {
+  if (!select) return;
+  select.replaceChildren(
+    ...[{ value: "", label: models.length ? "— Modell wählen —" : "— keine gefunden —" }, ...models.map((m) => ({ value: m, label: m }))].map(
+      ({ value, label }) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        return option;
+      },
+    ),
+  );
+}
 
-llmModelInput?.addEventListener("change", () => {
-  const value = llmModelInput.value.trim();
-  if (value) localStorage.setItem(LLM_MODEL_STORAGE_KEY, value);
+if (cloudProviderSelect) cloudProviderSelect.value = localStorage.getItem(CLOUD_PROVIDER_STORAGE_KEY) ?? "";
+if (cloudBaseUrlInput) cloudBaseUrlInput.value = localStorage.getItem(CLOUD_BASE_URL_STORAGE_KEY) ?? "";
+if (cloudApiKeyInput) cloudApiKeyInput.value = localStorage.getItem(CLOUD_API_KEY_STORAGE_KEY) ?? "";
+if (cloudBaseUrlField) cloudBaseUrlField.hidden = cloudProviderSelect?.value !== "openai-compatible";
+
+cloudProviderSelect?.addEventListener("change", () => {
+  localStorage.setItem(CLOUD_PROVIDER_STORAGE_KEY, cloudProviderSelect.value);
+  if (cloudBaseUrlField) cloudBaseUrlField.hidden = cloudProviderSelect.value !== "openai-compatible";
+  fillModelSelect(cloudModelSelect, []);
 });
 
-cloudModelInput?.addEventListener("change", () => {
-  const value = cloudModelInput.value.trim();
-  if (value) localStorage.setItem(CLOUD_MODEL_STORAGE_KEY, value);
+cloudBaseUrlInput?.addEventListener("change", () => {
+  localStorage.setItem(CLOUD_BASE_URL_STORAGE_KEY, cloudBaseUrlInput.value.trim());
 });
 
 cloudApiKeyInput?.addEventListener("change", () => {
   // Bewusst nur lokal im Browser gespeichert (localStorage) — der Schlüssel
-  // verlässt dieses Gerät nur direkt an die Anthropic-API, nie an KieselWesen
-  // selbst oder einen Zwischenserver.
+  // verlässt dieses Gerät nur direkt an den gewählten Anbieter, nie an
+  // KieselWesen selbst oder einen Zwischenserver.
   localStorage.setItem(CLOUD_API_KEY_STORAGE_KEY, cloudApiKeyInput.value);
+});
+
+llmRefreshModelsButton?.addEventListener("click", async () => {
+  try {
+    fillModelSelect(llmModelSelect, await listOllamaModels());
+  } catch (error) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = `Installierte Modelle konnten nicht geladen werden: ${error.message}`;
+      suggestionsResult.replaceChildren(message);
+    }
+  }
+});
+
+cloudRefreshModelsButton?.addEventListener("click", async () => {
+  const provider = cloudProviderSelect?.value;
+  const apiKey = cloudApiKeyInput?.value ?? "";
+  if (!provider || !apiKey) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = "Bitte zuerst Anbieter und API-Schlüssel angeben.";
+      suggestionsResult.replaceChildren(message);
+    }
+    return;
+  }
+  try {
+    const models =
+      provider === "anthropic"
+        ? await listAnthropicModels(apiKey)
+        : await listOpenAiCompatibleModels(cloudBaseUrlInput.value.trim(), apiKey);
+    fillModelSelect(cloudModelSelect, models);
+  } catch (error) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = `Verfügbare Modelle konnten nicht geladen werden: ${error.message}`;
+      suggestionsResult.replaceChildren(message);
+    }
+  }
 });
 
 /**
@@ -331,21 +386,35 @@ async function requestSuggestionFrom(client, modelName) {
 }
 
 llmSuggestButton?.addEventListener("click", () => {
-  requestSuggestionFrom(createOllamaClient(currentLlmModelName()), currentLlmModelName());
-});
-
-cloudSuggestButton?.addEventListener("click", () => {
-  const apiKey = currentCloudApiKey();
-  if (!apiKey) {
+  const modelName = llmModelSelect?.value;
+  if (!modelName) {
     if (suggestionsResult) {
       const message = document.createElement("p");
-      message.textContent = "Kein API-Schlüssel für das große Cloud-Modell hinterlegt.";
+      message.textContent = "Bitte zuerst ein lokales Modell aus der Liste auswählen.";
       suggestionsResult.replaceChildren(message);
     }
     return;
   }
-  const modelName = currentCloudModelName();
-  requestSuggestionFrom(createAnthropicClient(apiKey, modelName), modelName);
+  requestSuggestionFrom(createOllamaClient(modelName), modelName);
+});
+
+cloudSuggestButton?.addEventListener("click", () => {
+  const provider = cloudProviderSelect?.value;
+  const apiKey = cloudApiKeyInput?.value ?? "";
+  const modelName = cloudModelSelect?.value;
+  if (!provider || !apiKey || !modelName) {
+    if (suggestionsResult) {
+      const message = document.createElement("p");
+      message.textContent = "Bitte Anbieter, API-Schlüssel und Modell auswählen (Modelle zuerst laden).";
+      suggestionsResult.replaceChildren(message);
+    }
+    return;
+  }
+  const client =
+    provider === "anthropic"
+      ? createAnthropicClient(apiKey, modelName)
+      : createOpenAiCompatibleClient(cloudBaseUrlInput.value.trim(), apiKey, modelName);
+  requestSuggestionFrom(client, modelName);
 });
 
 function confirmSuggestionById(suggestionId) {
