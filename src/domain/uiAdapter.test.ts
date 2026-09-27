@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
-import { appendEvent, createEmptyLog } from "./eventLog.js";
+import { appendEvent, appendRejectedSuggestionEvent, createEmptyLog } from "./eventLog.js";
 import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
 import type { RunState } from "./runSerialization.js";
 import { normalizeNodePositions, toUiPayload } from "./uiAdapter.js";
@@ -99,5 +99,19 @@ describe("toUiPayload", () => {
     const run = { ...seedRun(), restActive: true };
     const payload = toUiPayload(run);
     expect(payload.status).toBe("ruhephase");
+  });
+
+  it("zeigt einen abgelehnten Vorschlag im Verlauf lesbar an, statt als bloßes 'Ereignis'", () => {
+    const run = seedRun();
+    run.log = appendRejectedSuggestionEvent(run.log, {
+      id: "rej1",
+      time: 1,
+      suggestionText: "Vielleicht folgt die Katze.",
+      reason: "kein bekannter Ort in der Antwort",
+    });
+    const payload = toUiPayload(run);
+    expect(payload.history.at(-1)).toEqual({
+      label: "rejected_suggestion: Vielleicht folgt die Katze. (Grund: kein bekannter Ort in der Antwort)",
+    });
   });
 });

@@ -138,6 +138,64 @@ Zum Entwickeln mit Live-Fenster statt fertigem Installer:
 npm run tauri:dev
 ```
 
+## LLM-Vorschläge: nur aus dem Ereignisprotokoll, nie aus dem Graphen
+
+**Warum diese Trennung wichtig ist.** Ein LLM (egal ob lokal über Ollama
+oder über die Cloud) soll Kiesel bei Bedarf einen Vorschlag machen können,
+was als Nächstes passieren könnte. Bekäme das LLM dafür Zugriff auf den
+inneren Graphen (Kanten, Kantenstärke, Aktivierung), entstünde eine
+Zirkularität: der Graph beeinflusst den Vorschlag, der Vorschlag würde nach
+Bestätigung wieder den Graphen/Lerner beeinflussen — das LLM würde am Ende
+im Kreis lernen, was es selbst mitgeformt hat, statt etwas Neues aus
+echten Ereignissen abzuleiten. Deshalb bekommt das LLM-Modul ausschließlich
+das Ereignisprotokoll als Kontext, nie den Graphen.
+
+**Der Datenfluss:**
+
+1. **`readEventLog(log, limit)`** (`src/domain/eventLog.ts`) liefert die
+   letzten `limit` Ereignisse — nur Zeitstempel, Ereignistyp und beteiligte
+   Objekte. Kein Zugriff auf Kanten, Stärken, Aktivierung oder sonst etwas
+   aus `InnerModelState`. Das ist die **einzige** Schnittstelle, über die
+   ein LLM Kontext bekommen darf.
+2. Der Prompt-Builder (`startLlmRound` in `app.js`) baut daraus den Prompt
+   und sagt dem LLM ausdrücklich: *"Schlage nur vor, was aus diesen
+   Ereignissen folgt — nicht, was passieren wird."*
+3. Jeder Vorschlag trägt eine verpflichtende **`source`-Angabe**
+   (`event_log` oder `graph`, siehe `src/domain/llmSuggestions.ts`).
+   `addSuggestion` lehnt einen Vorschlag ohne gültige `source` ab.
+   `classifySuggestionSource` prüft die Antworttext zusätzlich auf
+   erkennbares Graph-Vokabular (z.B. "Kante", "Stärke") — ein LLM kann sich
+   trotz reinem Ereignis-Kontext etwas ausdenken. Erkennt die Prüfung
+   solches Vokabular, wird der Vorschlag als `source: "graph"` markiert.
+4. **Nur `source: "event_log"`-Vorschläge lassen sich bestätigen.**
+   `confirmSuggestion` verändert einen `"graph"`-Vorschlag nie zu
+   `"confirmed"` — er bleibt sichtbar (Transparenz), landet aber nie im
+   Lernschritt des Mini-Lerners.
+5. **Abgelehnte Vorschläge werden nicht gelöscht.** Sowohl ein von Hand
+   verworfener als auch ein automatisch abgelehnter Vorschlag (z.B. weil
+   die Antwort keinen bekannten Ort nennt) wird über
+   `appendRejectedSuggestionEvent` als eigene Ereignisart
+   (`rejected_suggestion`) ins Protokoll geschrieben — mit Zeitstempel,
+   Vorschlagstext und optionaler Begründung. `readEventLog` liefert diese
+   Einträge mit aus, damit ein späterer LLM-Durchlauf sieht, was schon
+   versucht wurde, und dieselbe Idee nicht wiederholt.
+6. **Manueller Takt.** Ein LLM-Durchlauf startet ausschließlich über
+   `startLlmRound(client, modelName)` — aufgerufen nur aus den beiden
+   "Um Rat fragen"-Buttons im Tab "Vorschläge". Es gibt keinen Scheduler
+   und keinen automatischen Trigger bei Ereignissen (Objektberührung,
+   Ruhephase o.ä.): der Mensch ist der Taktgeber.
+7. **Fallback.** Die Engine, der Mini-Lerner und alle übrigen Funktionen
+   laufen unabhängig vom LLM weiter. Schlägt ein LLM-Durchlauf fehl
+   (Netzwerkfehler, Ollama nicht erreichbar, ungültiger Schlüssel), wird
+   der Fehler nur als Hinweis angezeigt — `run.model`/`run.log`/
+   `run.learner` bleiben unverändert, kein Abbruch, kein Fehlerzustand, der
+   sich fortpflanzt.
+
+Nicht verändert durch diese Trennung: die Engine-Regeln
+(`experimentEngine.ts`), der Mini-Lerner (`miniLearner.ts`) und die
+Bestätigungs-Logik selbst (`confirmSuggestion`/`rejectSuggestion` als
+Statusübergänge) bleiben wie zuvor.
+
 ## Lizenz
 
 [PolyForm Noncommercial License 1.0.0](LICENSE).

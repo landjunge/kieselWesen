@@ -12,6 +12,8 @@ import {
   createEmptyModel,
   createInstances,
   addSuggestion,
+  appendRejectedSuggestionEvent,
+  classifySuggestionSource,
   confirmSuggestion,
   createAnthropicClient,
   createNode,
@@ -28,6 +30,7 @@ import {
   listOllamaModels,
   listOpenAiCompatibleModels,
   predictNext,
+  readEventLog,
   rejectSuggestion,
   replaySequence,
   runRestStep,
@@ -353,34 +356,73 @@ cloudRefreshModelsButton?.addEventListener("click", async () => {
 });
 
 /**
- * Gemeinsamer Ablauf für beide Quellen: Prompt bauen, Modell befragen,
- * Antwort als unbestätigten Vorschlag ablegen. `client`/`modelName` sind
- * austauschbar — Kiesel selbst kennt nur die LlmClient-Schnittstelle.
+ * Ein einzelner LLM-Durchlauf: Prompt aus dem Ereignisprotokoll bauen,
+ * Modell befragen, Antwort als unbestätigten Vorschlag ablegen.
+ * `client`/`modelName` sind austauschbar — Kiesel selbst kennt nur die
+ * LlmClient-Schnittstelle.
+ *
+ * Manueller Takt (gegen versteckte Automatik): startLlmRound läuft NUR,
+ * wenn dieser Code aufgerufen wird — ausschließlich aus den beiden
+ * Button-Klick-Handlern unten. Kein Scheduler, kein Timer, kein Aufruf aus
+ * touchObject/setRestActive/applyRestStep. Berühren von Objekten oder das
+ * Verstreichen von Zeit lösen nie von selbst einen LLM-Durchlauf aus.
+ *
+ * Fallback (gegen Kopplung): schlägt die Anfrage fehl (Netzwerk, Ollama
+ * nicht erreichbar, ungültiger Schlüssel), wird der Fehler hier abgefangen
+ * und nur als Hinweis angezeigt — run.model/run.log/run.learner bleiben
+ * unverändert. Die Engine, der Mini-Lerner und der Rest der App laufen
+ * unabhängig vom LLM weiter; ein sterbender LLM-Durchlauf reißt nichts mit.
+ *
+ * Quellentrennung gegen Zirkularität: der Prompt bekommt AUSSCHLIESSLICH
+ * die letzten Ereignisse aus dem Protokoll (readEventLog) — nie Kanten,
+ * Stärken oder sonst etwas aus dem Graphen. Das schließt frühere
+ * "rejected_suggestion"-Einträge mit ein, damit das LLM sieht, was es schon
+ * versucht hat, und dieselbe Idee nicht wiederholt. Das LLM soll nur
+ * vorschlagen, was aus diesen Ereignissen folgt, nicht, was "passieren
+ * wird". Trotzdem kann sich ein LLM Dinge ausdenken; classifySuggestionSource
+ * prüft die Antwort deshalb zusätzlich auf erkennbares Graph-Vokabular und
+ * markiert einen solchen Vorschlag als "graph" — der lässt sich nie
+ * bestätigen.
  */
-async function requestSuggestionFrom(client, modelName) {
+async function startLlmRound(client, modelName) {
   if (!lastTouchedNodeId) return;
-  // Alle bekannten Orte im Zimmer, nicht nur die bereits berührten — ein
-  // sinnvoller Vorschlag kann auch ein noch nicht berührter Ort sein
-  // (z.B. "danach vielleicht die Katze").
-  const knownNodeIds = [...world.objects.keys()];
+  const recentEvents = readEventLog(run.log, 10);
+  const eventsText = recentEvents
+    .map((entry) => {
+      const base = `[${entry.time}] ${entry.type} (${entry.participants.join(", ") || "keine Beteiligten"})`;
+      return entry.detail ? `${base}: ${entry.detail}` : base;
+    })
+    .join("; ");
   const prompt =
-    `Bekannte Orte: ${knownNodeIds.join(", ")}. ` +
+    `Die letzten Ereignisse in zeitlicher Reihenfolge, einschließlich bereits abgelehnter Vorschläge: ${eventsText}. ` +
     `Zuletzt berührter Ort: "${lastTouchedNodeId}". ` +
-    `Welcher bekannte Ort folgt darauf am wahrscheinlichsten? Antworte nur mit dem Namen.`;
+    `Schlage nur vor, was aus diesen Ereignissen folgt — nicht, was passieren wird. ` +
+    `Wiederhole keine bereits abgelehnte Idee. Antworte nur mit dem Namen des als Nächstes berührten Ortes.`;
 
   showNotice(`Frage "${modelName}"...`);
 
   try {
     const text = await client.suggest(prompt);
+    const knownNodeIds = [...world.objects.keys()];
     const matchedToId = knownNodeIds.find((id) => text.trim().toLowerCase().includes(id.toLowerCase()));
     if (!matchedToId) {
       // Kein bekannter Ort in der Antwort erkannt — wird bewusst nicht als
       // bestätigbarer Vorschlag abgelegt, damit Kiesel nie einen erfundenen
-      // Ort lernen kann.
+      // Ort lernen kann. Bleibt aber nicht spurlos: als abgelehnter Vorschlag
+      // im Ereignisprotokoll, damit künftige Durchläufe das sehen.
+      run.log = appendRejectedSuggestionEvent(run.log, {
+        id: `sugg${++suggestionCounter}`,
+        time: Date.now(),
+        suggestionText: text.trim(),
+        reason: "kein bekannter Ort in der Antwort",
+      });
+      saveRunToStorage(run);
+      render();
       showNotice(`"${modelName}" hat keinen bekannten Ort genannt. Antwort verworfen: "${text.trim()}"`);
       renderSuggestionsPanel();
       return;
     }
+    const source = classifySuggestionSource(text);
     suggestionCounter += 1;
     run.suggestions = addSuggestion(getSuggestions(run), {
       id: `sugg${suggestionCounter}`,
@@ -389,10 +431,17 @@ async function requestSuggestionFrom(client, modelName) {
       toId: matchedToId,
       text,
       modelName,
+      source,
     });
     saveRunToStorage(run);
-    clearNotice();
+    if (source === "graph") {
+      showNotice(`"${modelName}" hat sich erkennbar auf Graph-Wissen gestützt, das es nie bekommen hat. Vorschlag wird angezeigt, kann aber nicht bestätigt werden.`);
+    } else {
+      clearNotice();
+    }
   } catch (error) {
+    // Fallback: die Engine/der Rest der App laufen unbeeinflusst weiter —
+    // hier passiert nichts außer einem Hinweis für den Menschen.
     showNotice(`Anfrage an "${modelName}" fehlgeschlagen: ${error.message}`);
   }
   renderSuggestionsPanel();
@@ -404,7 +453,7 @@ llmSuggestButton?.addEventListener("click", () => {
     showNotice("Bitte zuerst ein LLM aus der Liste auswählen.");
     return;
   }
-  requestSuggestionFrom(createOllamaClient(modelName), modelName);
+  startLlmRound(createOllamaClient(modelName), modelName);
 });
 
 cloudSuggestButton?.addEventListener("click", () => {
@@ -419,24 +468,43 @@ cloudSuggestButton?.addEventListener("click", () => {
     provider === "anthropic"
       ? createAnthropicClient(apiKey, modelName)
       : createOpenAiCompatibleClient(cloudBaseUrlInput.value.trim(), apiKey, modelName);
-  requestSuggestionFrom(client, modelName);
+  startLlmRound(client, modelName);
 });
 
 function confirmSuggestionById(suggestionId) {
   const suggestion = getSuggestions(run).items.find((item) => item.id === suggestionId);
-  if (!suggestion || suggestion.status !== "pending") return;
+  if (!suggestion || suggestion.status !== "pending" || suggestion.source !== "event_log") return;
+  // confirmSuggestion selbst weigert sich bereits, einen source:"graph"-
+  // Vorschlag zu bestätigen (siehe llmSuggestions.ts) — die Prüfung hier
+  // ist zusätzlich, damit der Lernschritt gar nicht erst versucht wird.
+  const nextSuggestions = confirmSuggestion(getSuggestions(run), suggestionId);
+  const confirmed = nextSuggestions.items.find((item) => item.id === suggestionId)?.status === "confirmed";
+  if (!confirmed) return;
   // Bestätigung erzeugt denselben echten Lernschritt wie eine selbst
   // beobachtete Erfahrung (siehe touchObject) — keine Extra-Wissensquelle.
   run.learner = learnTransition(getLearner(run), suggestion.fromId, suggestion.toId);
-  run.suggestions = confirmSuggestion(getSuggestions(run), suggestionId);
+  run.suggestions = nextSuggestions;
   saveRunToStorage(run);
   renderSuggestionsPanel();
   renderLearnerPanel();
 }
 
 function rejectSuggestionById(suggestionId) {
+  const suggestion = getSuggestions(run).items.find((item) => item.id === suggestionId);
   run.suggestions = rejectSuggestion(getSuggestions(run), suggestionId);
+  if (suggestion) {
+    // Nicht gelöscht, sondern als eigene Ereignisart im Log sichtbar — ein
+    // späterer LLM-Durchlauf (readEventLog) sieht so, was schon abgelehnt
+    // wurde, und muss dieselbe Idee nicht erneut vorschlagen.
+    run.log = appendRejectedSuggestionEvent(run.log, {
+      id: `rej${suggestion.id}`,
+      time: Date.now(),
+      suggestionText: suggestion.text,
+      reason: suggestion.source === "graph" ? "aus Graph-Wissen, nicht bestätigbar" : undefined,
+    });
+  }
   saveRunToStorage(run);
+  render();
   renderSuggestionsPanel();
 }
 
@@ -455,22 +523,25 @@ function renderSuggestionsPanel() {
   const list = document.createElement("ul");
   for (const suggestion of [...items].reverse()) {
     const item = document.createElement("li");
+    const sourceLabel = suggestion.source === "graph" ? "aus Graph-Wissen, nicht bestätigbar" : "aus Ereignisprotokoll";
     const summary = document.createElement("p");
-    summary.textContent = `[${suggestion.modelName}] "${suggestion.fromId}" → "${suggestion.toId}" (${suggestion.status}): ${suggestion.text}`;
+    summary.textContent = `[${suggestion.modelName} · ${sourceLabel}] "${suggestion.fromId}" → "${suggestion.toId}" (${suggestion.status}): ${suggestion.text}`;
     item.append(summary);
 
     if (suggestion.status === "pending") {
-      const confirmButton = document.createElement("button");
-      confirmButton.type = "button";
-      confirmButton.textContent = "Bestätigen";
-      confirmButton.addEventListener("click", () => confirmSuggestionById(suggestion.id));
+      if (suggestion.source === "event_log") {
+        const confirmButton = document.createElement("button");
+        confirmButton.type = "button";
+        confirmButton.textContent = "Bestätigen";
+        confirmButton.addEventListener("click", () => confirmSuggestionById(suggestion.id));
+        item.append(confirmButton);
+      }
 
       const rejectButton = document.createElement("button");
       rejectButton.type = "button";
       rejectButton.textContent = "Verwerfen";
       rejectButton.addEventListener("click", () => rejectSuggestionById(suggestion.id));
-
-      item.append(confirmButton, rejectButton);
+      item.append(rejectButton);
     }
 
     list.append(item);
