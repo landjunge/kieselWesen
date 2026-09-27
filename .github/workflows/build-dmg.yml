@@ -1,0 +1,42 @@
+name: Mac-App bauen
+
+# Baut die KieselWesen.dmg automatisch auf einem echten Mac und legt sie
+# auf einer einzigen, immer aktuellen Release-Seite ab (Tag "aktuell").
+# So muss niemand mehr selbst ein Terminal benutzen, um an die neueste
+# Mac-App zu kommen — einfach die Release-Seite öffnen und herunterladen.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust-Werkzeugkette installieren
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: KieselWesen.dmg bauen
+        run: npm run package:dmg
+
+      - name: Auf der "aktuell"-Release-Seite veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: aktuell
+          name: KieselWesen – aktuelle Mac-App
+          body: |
+            Automatisch gebaut aus dem neuesten Stand von `main`
+            (${{ github.sha }}). Diese Datei wird bei jeder Änderung
+            ersetzt — hier ist immer die neueste Version.
+          files: src-tauri/target/release/bundle/dmg/KieselWesen.dmg

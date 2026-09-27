@@ -82,6 +82,15 @@ logic of its own. Tested for Intel Macs from macOS 10.15 (Catalina)
 onward — suitable for older machines too, such as a 2015 MacBook with
 an Intel Core i5.
 
+### Download a ready-made file (no terminal needed)
+
+The latest `KieselWesen.dmg` is built automatically whenever `main`
+changes, and always sits on the ["aktuell"](../../releases/tag/aktuell)
+release page — just download the `.dmg` there, double-click it, and
+drag the app into `Applications`.
+
+### Build it yourself (only if you need to)
+
 **The build must run on a Mac** (Xcode command line tools required) —
 it cannot be cross-compiled for macOS from a Linux environment.
 

@@ -85,6 +85,16 @@ einem eigenen Fenster, ohne eigene Logik. Getestet für Intel-Macs ab
 macOS 10.15 (Catalina) — geeignet auch für ältere Geräte wie ein
 MacBook (Intel Core i5) von 2015.
 
+### Fertige Datei herunterladen (kein Terminal nötig)
+
+Die neueste `KieselWesen.dmg` wird automatisch gebaut, sobald sich an
+`main` etwas ändert, und liegt immer aktuell auf der Release-Seite
+["aktuell"](../../releases/tag/aktuell) — dort einfach die `.dmg`-Datei
+herunterladen, per Doppelklick öffnen und die App in den
+`Programme`-Ordner ziehen.
+
+### Selbst bauen (nur bei Bedarf)
+
 **Der Build muss auf einem Mac laufen** (Xcode-Kommandozeilenwerkzeuge
 nötig) — er kann nicht aus einer Linux-Umgebung heraus für macOS
 kompiliert werden.
