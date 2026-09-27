@@ -4,11 +4,18 @@
 # mit "Not enough arguments" abbricht (bekannter Tauri-Bundler-Bug).
 # Voraussetzung: `npm run tauri:build` wurde bereits erfolgreich
 # ausgeführt und KieselWesen.app existiert.
+#
+# TAURI_TARGET (optional): dieselbe Rust-Zieltriple, mit der auch
+# `tauri build --target ...` aufgerufen wurde (z.B. beim Cross-Compilen
+# für Intel-Macs auf einem Apple-Silicon-Runner). Cargo legt Builds für
+# ein explizites Target unter target/<triple>/release/ statt target/release/
+# ab — dieses Skript muss also denselben Pfad kennen.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP_PATH="$REPO_ROOT/src-tauri/target/release/bundle/macos/KieselWesen.app"
-DMG_DIR="$REPO_ROOT/src-tauri/target/release/bundle/dmg"
+TARGET_DIR="$REPO_ROOT/src-tauri/target/${TAURI_TARGET:+$TAURI_TARGET/}release"
+APP_PATH="$TARGET_DIR/bundle/macos/KieselWesen.app"
+DMG_DIR="$TARGET_DIR/bundle/dmg"
 DMG_PATH="$DMG_DIR/KieselWesen.dmg"
 STAGING_DIR="$(mktemp -d)"
 

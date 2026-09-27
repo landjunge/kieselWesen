@@ -91,7 +91,11 @@ Die neueste `KieselWesen.dmg` wird automatisch gebaut, sobald sich an
 `main` etwas ändert, und liegt immer aktuell auf der Release-Seite
 ["aktuell"](../../releases/tag/aktuell) — dort einfach die `.dmg`-Datei
 herunterladen, per Doppelklick öffnen und die App in den
-`Programme`-Ordner ziehen.
+`Programme`-Ordner ziehen. Diese Datei ist gezielt für Intel-Macs
+gebaut (x86_64) — der automatische Bau läuft zwar auf einem
+Apple-Silicon-Rechner bei GitHub, kompiliert aber bewusst für Intel, da
+das die Zielhardware ist (siehe `.github/workflows/build-dmg.yml`). Auf
+einem Apple-Silicon-Mac läuft sie ebenfalls, über Rosetta.
 
 ### Selbst bauen (nur bei Bedarf)
 
