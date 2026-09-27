@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { diffGraphEdges, type GraphEdgeDiff } from "./graphDiff.js";
 import { deserializeRun, serializeRun, type RunState, type SerializedRun } from "./runSerialization.js";
 
 function runFilePath(dir: string, runId: string): string {
@@ -57,4 +58,16 @@ export async function createSnapshot(dir: string, run: RunState, snapshotId: str
 export async function loadSnapshot(dir: string, runId: string, snapshotId: string): Promise<RunState> {
   const raw = await readFile(snapshotFilePath(dir, runId, snapshotId), "utf-8");
   return deserializeRun(JSON.parse(raw) as SerializedRun);
+}
+
+/**
+ * Vergleichsmodus (Punkt 2): lädt zwei gespeicherte Läufe von der Platte
+ * und vergleicht ihre Graphen — Kanten nur in A, nur in B, oder in beiden
+ * mit Stärkenunterschied. Die Läufe müssen dafür zuvor mit saveRun (oder
+ * createSnapshot) gespeichert worden sein; deserializeRun/serializeRun
+ * garantieren, dass sie unverändert wieder ladbar sind.
+ */
+export async function compareStoredRuns(dir: string, runIdA: string, runIdB: string): Promise<GraphEdgeDiff> {
+  const [runA, runB] = await Promise.all([loadRun(dir, runIdA), loadRun(dir, runIdB)]);
+  return diffGraphEdges(runA.model, runB.model);
 }

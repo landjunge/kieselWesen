@@ -17,8 +17,12 @@ export interface EngineParams {
   edgeStrengthGainOnUse: number;
   /** Aktivierungsabklingen pro Ruheschritt. */
   activationDecayPerRestStep: number;
-  /** Verblassen der Verbindungsstärke pro Ruheschritt. */
-  edgeFadePerRestStep: number;
+  /**
+   * Verblassen der Stärke einer vom Ereignis betroffenen Kante (siehe
+   * applyEventEdgeFade). Kein zeitbasierter Wert mehr — wirkt nur, wenn ein
+   * Ereignis eine Kante tatsächlich berührt.
+   */
+  edgeFadeOnEvent: number;
 }
 
 /**
@@ -29,19 +33,22 @@ export const demoEngineParams: EngineParams = {
   activationBoostOnUse: 0.2,
   edgeStrengthGainOnUse: 1,
   activationDecayPerRestStep: 0.05,
-  edgeFadePerRestStep: 0.1,
+  edgeFadeOnEvent: 0.1,
 };
 
 export interface EngineRulesEnabled {
   activationOnUse: boolean;
   edgeStrengthOnUse: boolean;
   restDecay: boolean;
+  /** Verblassen betroffener Kanten bei einem Ereignis (siehe applyEventEdgeFade). */
+  edgeFadeOnEvent: boolean;
 }
 
 export const allRulesEnabled: EngineRulesEnabled = {
   activationOnUse: true,
   edgeStrengthOnUse: true,
   restDecay: true,
+  edgeFadeOnEvent: true,
 };
 
 export interface EngineConfig {
@@ -121,9 +128,11 @@ export function applyEventToPair(
 }
 
 /**
- * Ein deterministischer Ruheschritt: lässt Aktivierung und Kantenstärke
- * abklingen, löscht dabei aber nie einen Knoten oder eine Verbindung.
- * Ohne aktivierte restDecay-Regel verändert Ruhe die Struktur nicht.
+ * Ein deterministischer Ruheschritt: lässt nur die Aktivierung abklingen,
+ * löscht dabei aber nie einen Knoten oder eine Verbindung. Ohne aktivierte
+ * restDecay-Regel verändert Ruhe die Struktur nicht. Kanten verblassen hier
+ * NICHT mehr (siehe applyEventEdgeFade) — Ruhe ist keine feste Zeitspanne,
+ * an die Kanten-Verblassen gekoppelt wäre.
  */
 export function runRestStep(
   state: InnerModelState,
@@ -145,10 +154,37 @@ export function runRestStep(
     }
   }
 
+  return { state: next, changes };
+}
+
+/**
+ * Kanten-Verblassen ist an Ereignisse gekoppelt, nicht an feste Zeit: wenn
+ * ein Ereignis eintritt, prüft diese Funktion, welche vorhandenen Kanten
+ * betroffen sind — jede Kante, die mindestens einen der beteiligten Knoten
+ * berührt — und lässt nur diese verblassen. Eine Kante, die von keinem der
+ * beteiligten Knoten berührt wird, bleibt unverändert stabil. Wird separat
+ * von applyEventToPair/applyEventToSingleNode aufgerufen (nicht automatisch
+ * mitgezogen), damit die eigentliche Nutzungs-Verstärkung einer Kante davon
+ * unabhängig bleibt.
+ */
+export function applyEventEdgeFade(
+  state: InnerModelState,
+  config: EngineConfig,
+  at: number,
+  eventId: string,
+  participantIds: readonly string[],
+): EngineRunResult {
+  let next = state;
+  const changes: EngineChangeLogEntry[] = [];
+
+  if (!config.rulesEnabled.edgeFadeOnEvent) return { state: next, changes };
+
   for (const edge of next.edges.values()) {
     if (edge.strength <= 0) continue;
-    next = fadeEdge(next, at, edge.nodeA, edge.nodeB, config.params.edgeFadePerRestStep);
-    changes.push({ at, rule: "restDecay", targetKind: "edge", targetId: `${edge.nodeA}::${edge.nodeB}` });
+    const touched = participantIds.includes(edge.nodeA) || participantIds.includes(edge.nodeB);
+    if (!touched) continue;
+    next = fadeEdge(next, at, edge.nodeA, edge.nodeB, config.params.edgeFadeOnEvent);
+    changes.push({ at, rule: "edgeFadeOnEvent", targetKind: "edge", targetId: `${edge.nodeA}::${edge.nodeB}`, eventId });
   }
 
   return { state: next, changes };

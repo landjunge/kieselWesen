@@ -4,6 +4,7 @@
 import {
   allRulesEnabled,
   appendEvent,
+  applyEventEdgeFade,
   applyEventToPair,
   applyEventToSingleNode,
   branchFromSnapshot,
@@ -183,6 +184,12 @@ function touchObject(objectId, label) {
     // externe Wissensquelle.
     run.learner = learnTransition(getLearner(run), lastTouchedNodeId, objectId);
   }
+
+  // Kanten-Verblassen ist an dieses Ereignis gekoppelt, nicht an feste Zeit:
+  // nur Kanten, die einen der beteiligten Knoten berühren, verblassen hier.
+  const fade = applyEventEdgeFade(run.model, run.engineConfig, at, eventId, [lastTouchedNodeId, objectId].filter(Boolean));
+  run.model = fade.state;
+
   lastTouchedNodeId = objectId;
 
   saveRunToStorage(run);
