@@ -134,6 +134,7 @@ describe("Lauf-Serialisierung — LLM-Vorschläge bleiben erhalten", () => {
         toId: "n2",
         text: "Vielleicht führt n1 oft zu n2.",
         modelName: "llama3.2:3b",
+        source: "event_log",
       }),
     };
 

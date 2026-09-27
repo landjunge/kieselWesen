@@ -82,6 +82,11 @@ function describeEvent(payload: unknown, participants: string[]): string {
   if (payload && typeof payload === "object" && "label" in payload) {
     return String((payload as { label: unknown }).label);
   }
+  if (payload && typeof payload === "object" && "type" in payload) {
+    const type = String((payload as { type: unknown }).type);
+    const detail = "detail" in payload ? String((payload as { detail: unknown }).detail) : undefined;
+    return detail ? `${type}: ${detail}` : type;
+  }
   if (participants.length > 0) return participants.join(", ");
   return "Ereignis";
 }

@@ -720,6 +720,40 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     expect(resultText).toContain("pending");
     await page.context().close();
   });
+
+  it("eine Antwort, die sich auf Graph-Wissen (Kantenstärke) stützt, wird als source: graph markiert und ist nicht bestätigbar", async () => {
+    const { page } = await freshPage();
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      // Der Prompt enthält nur Ereignisdaten — das LLM hat diese Antwort
+      // sich erkennbar aus Graph-Wissen (Kantenstärke) ausgedacht, das es
+      // nie bekommen hat.
+      await route.fulfill({ json: { response: "Die Kante zur Katze ist stark, also cat." } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    const resultText = await page.locator("#suggestions-result").textContent();
+    expect(resultText).toContain("aus Graph-Wissen, nicht bestätigbar");
+    const confirmButtonCount = await page.locator("#suggestions-result button:has-text('Bestätigen')").count();
+    expect(confirmButtonCount).toBe(0);
+
+    await page.click("#tab-learner");
+    const learnerText = await page.locator("#learner-result").textContent();
+    expect(learnerText).toContain("Noch kein gelernter Übergang");
+    await page.context().close();
+  });
 });
 
 describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle (Anbieter/Modell aus echter Liste, kein Raten)", () => {
@@ -822,6 +856,115 @@ describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle (A
 
     const beforeConfirm = await page.locator("#suggestions-result").textContent();
     expect(beforeConfirm).toContain("deepseek-chat");
+    await page.context().close();
+  });
+});
+
+describe("E2E — abgelehnte Vorschläge bleiben im Ereignisprotokoll sichtbar, statt gelöscht zu werden", () => {
+  it("ein verworfener Vorschlag erscheint als eigener Eintrag im Verlauf und im nächsten LLM-Prompt", async () => {
+    const { page } = await freshPage();
+    let secondPromptBody = null;
+    let callCount = 0;
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      callCount += 1;
+      if (callCount === 2) secondPromptBody = route.request().postDataJSON();
+      await route.fulfill({ json: { response: "cat" } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
+
+    // Erster Durchlauf: Vorschlag kommt, wird verworfen.
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+    await page.click("#suggestions-result button:has-text('Verwerfen')");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("rejected") ?? false,
+    );
+
+    // Im Verlauf erscheint der abgelehnte Vorschlag als eigener Eintrag.
+    await page.click("#tab-history");
+    const historyText = await page.locator("#history-list").textContent();
+    expect(historyText).toContain("rejected_suggestion");
+    expect(historyText).toContain("cat");
+
+    // Zweiter Durchlauf: der Prompt enthält den zuvor abgelehnten Vorschlag.
+    await page.click("#tab-suggestions");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(() => document.querySelectorAll("#suggestions-result li").length >= 2);
+
+    expect(secondPromptBody).not.toBeNull();
+    expect(secondPromptBody.prompt).toContain("rejected_suggestion");
+    expect(secondPromptBody.prompt).toContain("abgelehnt");
+    await page.context().close();
+  });
+});
+
+describe("E2E — LLM läuft nur im manuellen Takt (kein Scheduler, kein Auto-Trigger)", () => {
+  it("Objekte berühren und Zeit verstreichen lassen erzeugt nie von selbst einen Vorschlag", async () => {
+    const { page } = await freshPage();
+    let requestCount = 0;
+    await page.route("http://localhost:11434/api/generate", async () => {
+      requestCount += 1;
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(100);
+    await page.click(".cat");
+    await page.waitForTimeout(100);
+    await page.click(".kiesel");
+    await page.waitForTimeout(300);
+
+    await page.click("#tab-suggestions");
+    const resultText = await page.locator("#suggestions-result").textContent();
+    expect(resultText).toContain("Noch keinen Rat eingeholt");
+    expect(requestCount).toBe(0);
+    await page.context().close();
+  });
+});
+
+describe("E2E — Fallback: ein fehlgeschlagener LLM-Durchlauf reißt die Engine nicht mit", () => {
+  it("nach einem fehlgeschlagenen Durchlauf funktionieren Weltaktionen und der Mini-Lerner unverändert weiter", async () => {
+    const { page, consoleErrors } = await freshPage();
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      await route.fulfill({ status: 500, body: "Ollama nicht erreichbar" });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-notice")?.textContent?.includes("fehlgeschlagen") ?? false,
+    );
+
+    // Die Engine läuft unabhängig weiter: eine neue Weltaktion erzeugt ganz
+    // normal ein Ereignis und einen gelernten Übergang.
+    await page.click(".cat");
+    await page.waitForTimeout(150);
+    await page.click("#tab-learner");
+    const learnerText = await page.locator("#learner-result").textContent();
+    expect(learnerText).toContain('Zuletzt berührt: "cat"');
+    // Die absichtlich simulierte 500er-Antwort erzeugt selbst ein Browser-
+    // Netzwerkprotokoll ("Failed to load resource") — das ist kein Absturz
+    // der App. Relevant ist nur: keine unbehandelte JS-Ausnahme (pageerror).
+    const uncaughtExceptions = consoleErrors.filter((message) => !message.includes("Failed to load resource"));
+    expect(uncaughtExceptions).toEqual([]);
     await page.context().close();
   });
 });
