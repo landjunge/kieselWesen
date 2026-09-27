@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyModel, createNode, ensureEdge } from "./innerModel.js";
+import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
 import {
   allRulesEnabled,
+  applyEventEdgeFade,
   applyEventToPair,
   applyEventToSingleNode,
   demoEngineParams,
@@ -49,7 +50,7 @@ describe("Versuchsmotor — Ereigniswirkung", () => {
     const state = seedState();
     const off: EngineConfig = {
       params: demoEngineParams,
-      rulesEnabled: { activationOnUse: false, edgeStrengthOnUse: false, restDecay: false },
+      rulesEnabled: { activationOnUse: false, edgeStrengthOnUse: false, restDecay: false, edgeFadeOnEvent: false },
     };
     const result = applyEventToPair(state, off, 1, "ev1", "n1", "n2");
     expect(result.state.nodes.get("n1")?.activation).toBe(0);
@@ -74,6 +75,58 @@ describe("Versuchsmotor — Ruheschritt", () => {
     const result = runRestStep(state, off, 2);
     expect(result.state).toBe(state);
     expect(result.changes).toHaveLength(0);
+  });
+});
+
+describe("Versuchsmotor — Kanten-Verblassen ist an Ereignisse gekoppelt, nicht an feste Zeit", () => {
+  function seedTwoEdges() {
+    let state = createEmptyModel();
+    state = createNode(state, { id: "n1", at: 0, position: { x: 0, y: 0, z: 0 } });
+    state = createNode(state, { id: "n2", at: 0, position: { x: 1, y: 0, z: 0 } });
+    state = createNode(state, { id: "n3", at: 0, position: { x: 2, y: 0, z: 0 } });
+    state = ensureEdge(state, { id: "e1", at: 0, nodeA: "n1", nodeB: "n2" });
+    state = useEdge(state, 0, "n1", "n2", 5);
+    state = ensureEdge(state, { id: "e2", at: 0, nodeA: "n2", nodeB: "n3" });
+    state = useEdge(state, 0, "n2", "n3", 5);
+    return state;
+  }
+
+  it("eine von einem Ereignis berührte Kante verblasst; eine unberührte Kante bleibt stabil", () => {
+    const state = seedTwoEdges();
+    // Ereignis betrifft n1 und n2 — Kante n1::n2 ist berührt (ein Endpunkt
+    // reicht schon), Kante n2::n3 ist ebenfalls berührt (Endpunkt n2), aber
+    // eine völlig unbeteiligte Kante bliebe unverändert.
+    const result = applyEventEdgeFade(state, config, 1, "ev1", ["n1", "n2"]);
+    expect(result.state.edges.get("n1::n2")!.strength).toBe(5 - demoEngineParams.edgeFadeOnEvent);
+    // n2::n3 teilt sich Knoten n2 mit dem Ereignis und ist damit "berührt".
+    expect(result.state.edges.get("n2::n3")!.strength).toBe(5 - demoEngineParams.edgeFadeOnEvent);
+  });
+
+  it("eine Kante ohne gemeinsamen Knoten mit dem Ereignis bleibt exakt stabil", () => {
+    let state = seedTwoEdges();
+    state = createNode(state, { id: "n4", at: 0, position: { x: 3, y: 0, z: 0 } });
+    state = createNode(state, { id: "n5", at: 0, position: { x: 4, y: 0, z: 0 } });
+    state = ensureEdge(state, { id: "e3", at: 0, nodeA: "n4", nodeB: "n5" });
+    state = useEdge(state, 0, "n4", "n5", 5);
+
+    const result = applyEventEdgeFade(state, config, 1, "ev1", ["n1", "n2"]);
+    expect(result.state.edges.get("n4::n5")!.strength).toBe(5);
+    expect(result.changes.some((c) => c.targetId === "n4::n5")).toBe(false);
+  });
+
+  it("wirkt nicht, wenn die Regel deaktiviert ist", () => {
+    const state = seedTwoEdges();
+    const off: EngineConfig = { params: demoEngineParams, rulesEnabled: { ...allRulesEnabled, edgeFadeOnEvent: false } };
+    const result = applyEventEdgeFade(state, off, 1, "ev1", ["n1", "n2"]);
+    expect(result.state).toBe(state);
+    expect(result.changes).toHaveLength(0);
+  });
+
+  it("Ruheschritte allein lassen Kanten unverändert — kein zeitbasiertes Verblassen mehr", () => {
+    const state = seedTwoEdges();
+    const afterRest = runRestStep(state, config, 5);
+    expect(afterRest.state.edges.get("n1::n2")!.strength).toBe(5);
+    expect(afterRest.state.edges.get("n2::n3")!.strength).toBe(5);
   });
 });
 

@@ -4,8 +4,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { allRulesEnabled, demoEngineParams } from "./experimentEngine.js";
 import { createEmptyLog } from "./eventLog.js";
-import { createEmptyModel, createNode, ensureEdge } from "./innerModel.js";
+import { createEmptyModel, createNode, ensureEdge, useEdge } from "./innerModel.js";
 import {
+  compareStoredRuns,
   createSnapshot,
   listRunIds,
   loadRun,
@@ -79,5 +80,25 @@ describe("Persistenz", () => {
     expect((await listRunIds(dir)).sort()).toEqual(["run-a", "run-b"]);
     const originalReloaded = await loadRun(dir, "run-a");
     expect(originalReloaded.model.nodes.size).toBe(2);
+  });
+
+  it("compareStoredRuns lädt zwei gespeicherte Läufe und vergleicht ihre Graphen", async () => {
+    const runA = seedRun("run-a");
+    let modelB = createEmptyModel();
+    modelB = createNode(modelB, { id: "n1", at: 0, position: { x: 0, y: 0, z: 0 } });
+    modelB = createNode(modelB, { id: "n2", at: 0, position: { x: 1, y: 0, z: 0 } });
+    modelB = ensureEdge(modelB, { id: "e1", at: 0, nodeA: "n1", nodeB: "n2" });
+    modelB = useEdge(modelB, 0, "n1", "n2", 9);
+    const runB: RunState = { ...runA, runId: "run-b", model: modelB };
+
+    await saveRun(dir, runA);
+    await saveRun(dir, runB);
+
+    const diff = await compareStoredRuns(dir, "run-a", "run-b");
+    expect(diff.onlyInA).toEqual([]);
+    expect(diff.onlyInB).toEqual([]);
+    expect(diff.inBoth).toEqual([
+      { edgeKey: "n1::n2", nodeA: "n1", nodeB: "n2", strengthA: 0, strengthB: 9, strengthDelta: 9 },
+    ]);
   });
 });

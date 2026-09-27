@@ -196,6 +196,73 @@ Nicht verändert durch diese Trennung: die Engine-Regeln
 Bestätigungs-Logik selbst (`confirmSuggestion`/`rejectSuggestion` als
 Statusübergänge) bleiben wie zuvor.
 
+## Fünf Erweiterungen: Verblassen, Vergleich, Verdichtung, Zeitstempel, Export
+
+### 1. Kanten-Verblassen ist an Ereignisse gekoppelt, nicht an feste Zeit
+
+Bisher ließ ein Ruheschritt (`runRestStep`) **jede** Kante im Graphen um
+einen festen Betrag verblassen, unabhängig davon, ob sie gerade etwas mit
+dem Geschehen zu tun hatte — praktisch eine feste Zeitspanne. Das ist jetzt
+anders: `applyEventEdgeFade(state, config, at, eventId, participantIds)`
+(`experimentEngine.ts`) prüft bei einem Ereignis, welche vorhandenen Kanten
+mindestens einen der beteiligten Knoten berühren, und lässt **nur diese**
+verblassen. Eine Kante ohne gemeinsamen Knoten mit dem Ereignis bleibt exakt
+stabil. `runRestStep` lässt seitdem nur noch die Knoten-Aktivierung
+abklingen, keine Kanten mehr — Ruhe ist keine feste Zeitspanne, an die
+Kanten-Verblassen gekoppelt wäre. In `app.js` wird `applyEventEdgeFade` bei
+jeder Weltobjekt-Berührung mit den beteiligten Knoten aufgerufen.
+
+### 2. Vergleichsmodus für zwei gespeicherte Läufe
+
+`compareStoredRuns(dir, runIdA, runIdB)` (`persistence.ts`) lädt zwei zuvor
+mit `saveRun` gespeicherte Läufe von der Platte und vergleicht ihre
+Graphen über `diffGraphEdges` (`graphDiff.ts`): Kanten nur in A, Kanten nur
+in B, und Kanten in beiden mit Stärkenunterschied
+(`{ onlyInA, onlyInB, inBoth }`). Läufe sind über `saveRun`/`loadRun`
+(bestehende, unveränderte Funktionen) jederzeit wieder ladbar. Ergänzt,
+statt ersetzt, das bestehende `compareRuns` in `compare.ts`, das für den
+Mehrfach-Kiesel-Vergleich zweier live erzeugter Instanzen gedacht ist.
+
+### 3. Verdichtung des Ereignisprotokolls, ohne Datenverlust
+
+`compactEventLog(log, { id, olderThan, at })` (`eventLog.ts`) fasst alle
+Ereignisse mit `time < olderThan` zu einem einzelnen `event_summary`-
+Ereignis zusammen, das als Freitext die wichtigsten Fakten trägt: Anzahl
+und Zeitraum der zusammengefassten Ereignisse, ihre Ereignistypen und die
+beteiligten Objekte. Die Originalereignisse werden dabei **nicht
+gelöscht** — sie bekommen nur `compacted: true` und bleiben vollständig im
+Log erhalten (über `readEventLog(log, limit, { includeCompacted: true })`
+weiterhin lesbar). Ohne die Option liefert `readEventLog` standardmäßig
+nur nicht-verdichtete Ereignisse plus die Summaries — genau die Sicht, die
+ein LLM-Durchlauf braucht, ohne in einem langen Verlauf zu ertrinken.
+
+### 4. Zeitstempel: sortierte Reihenfolge und Zeitraum-Abfrage
+
+Jedes Ereignis trägt schon beim Schreiben (`appendEvent`) einen
+Zeitstempel. `readEventLog` sortiert seine Ausgabe jetzt ausdrücklich nach
+Zeit (nicht mehr nur zufällig durch die Schreibreihenfolge richtig). Neu:
+`getEventsBetween(log, start, end)` (`eventLog.ts`) liefert alle
+nicht-verdichteten Ereignisse in einem Zeitraum `[start, end]`, ebenfalls
+zeitlich sortiert — unabhängig davon, in welcher Reihenfolge sie
+geschrieben wurden.
+
+### 5. Graph-Export (JSON/GraphML)
+
+`exportGraph(model, format)` und `importGraph(text, format)`
+(`graphExport.ts`) exportieren bzw. lesen den aktuellen Graphen in einem
+schlanken, austauschbaren Format — unterstützt werden `"json"` und
+`"graphml"`. Der Export enthält alle Kanten mit ihrer Stärke und ihren
+Herkunftsangaben (welche zwei Knoten sie verbindet). Ein exportierter
+Graph ergibt beim Wiedereinlesen denselben Graphen (gleiche Knoten, gleiche
+Kanten mit gleicher Stärke). Getrennt von `runSerialization.ts`, das die
+vollständige interne Historie für die Wiederherstellung in KieselWesen
+selbst sichert — dieser Export ist für den Blick von außen bzw. in anderen
+Werkzeugen gedacht.
+
+Alle fünf Punkte sind reine Ergänzungen: Engine-Regeln, Mini-Lerner und
+Bestätigungs-Logik sind nur dort verändert, wo ausdrücklich beschrieben
+(Punkt 1 betrifft `experimentEngine.ts`, alles andere kommt on top).
+
 ## Lizenz
 
 [PolyForm Noncommercial License 1.0.0](LICENSE).

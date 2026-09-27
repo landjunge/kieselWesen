@@ -26,6 +26,21 @@ function eventType(event: WorldEvent): string {
   return payloadField(event.payload, "type") ?? payloadField(event.payload, "label") ?? (event.participants.length === 0 ? "ruhe" : "berührung");
 }
 
+function toEntry(event: WorldEvent): EventLogEntry {
+  const detail = payloadField(event.payload, "detail");
+  return {
+    time: event.time,
+    type: eventType(event),
+    participants: event.participants,
+    ...(detail !== undefined ? { detail } : {}),
+  };
+}
+
+export interface ReadEventLogOptions {
+  /** Auch bereits verdichtete Originalereignisse mitliefern (Default: nein). */
+  includeCompacted?: boolean;
+}
+
 /**
  * Liefert die letzten `limit` Ereignisse aus dem Log, reine Ereignisdaten
  * ohne jeden Zugriff auf Kanten, Stärken oder den inneren Graphen. Das ist
@@ -33,18 +48,67 @@ function eventType(event: WorldEvent): string {
  * (siehe llmSuggestions.ts) — der Graph bleibt davon komplett getrennt.
  * Enthält auch "rejected_suggestion"-Einträge (siehe appendRejectedSuggestionEvent)
  * — so sieht ein LLM, was es schon versucht hat, statt dieselbe Idee erneut
- * vorzuschlagen.
+ * vorzuschlagen. Sortiert immer nach Zeitstempel. Standardmäßig werden
+ * bereits verdichtete Originalereignisse (siehe compactEventLog)
+ * ausgeblendet — ihre Summary-Ereignisse bleiben aber immer sichtbar.
  */
-export function readEventLog(log: EventLog, limit: number): EventLogEntry[] {
-  return log.events.slice(-limit).map((event) => {
-    const detail = payloadField(event.payload, "detail");
-    return {
-      time: event.time,
-      type: eventType(event),
-      participants: event.participants,
-      ...(detail !== undefined ? { detail } : {}),
-    };
-  });
+export function readEventLog(log: EventLog, limit: number, options: ReadEventLogOptions = {}): EventLogEntry[] {
+  const relevant = options.includeCompacted ? log.events : log.events.filter((event) => !event.compacted);
+  const sorted = [...relevant].sort((a, b) => a.time - b.time);
+  return sorted.slice(-limit).map(toEntry);
+}
+
+/**
+ * Liefert alle (nicht verdichteten) Ereignisse in einem Zeitraum
+ * [start, end], nach Zeitstempel sortiert. Jedes Ereignis trägt seinen
+ * Zeitstempel bereits beim Schreiben (appendEvent verlangt `time`) — diese
+ * Funktion garantiert nur zusätzlich die sortierte Auswahl über einen
+ * Zeitraum, unabhängig von der Reihenfolge, in der Ereignisse geschrieben
+ * wurden.
+ */
+export function getEventsBetween(log: EventLog, start: number, end: number): EventLogEntry[] {
+  return log.events
+    .filter((event) => !event.compacted && event.time >= start && event.time <= end)
+    .sort((a, b) => a.time - b.time)
+    .map(toEntry);
+}
+
+function isSummaryEvent(event: WorldEvent): boolean {
+  return payloadField(event.payload, "type") === "event_summary";
+}
+
+/**
+ * Verdichtung des Ereignisprotokolls (Punkt 3): alle nicht bereits
+ * verdichteten, nicht selbst schon Summary-Ereignisse mit `time < olderThan`
+ * werden zu EINEM neuen "event_summary"-Ereignis zusammengefasst, das die
+ * wichtigsten Fakten als Freitext trägt (beteiligte Objekte, Ereignistypen,
+ * Zeitraum). Die Originalereignisse werden dabei NICHT gelöscht — sie
+ * bleiben im Log, bekommen aber `compacted: true`. Ohne betroffene
+ * Ereignisse ist dies ein No-op (dasselbe Log wird zurückgegeben).
+ */
+export function compactEventLog(
+  log: EventLog,
+  input: { id: string; olderThan: number; at: number },
+): EventLog {
+  const toCompact = log.events.filter((event) => !event.compacted && !isSummaryEvent(event) && event.time < input.olderThan);
+  if (toCompact.length === 0) return log;
+
+  const participants = [...new Set(toCompact.flatMap((event) => event.participants))];
+  const eventTypes = [...new Set(toCompact.map((event) => eventType(event)))];
+  const times = toCompact.map((event) => event.time);
+  const rangeStart = Math.min(...times);
+  const rangeEnd = Math.max(...times);
+  const detail =
+    `${toCompact.length} Ereignis(se) zwischen ${rangeStart} und ${rangeEnd}; ` +
+    `Typen: ${eventTypes.join(", ") || "keine"}; Beteiligte: ${participants.join(", ") || "keine"}`;
+
+  const compactedIds = new Set(toCompact.map((event) => event.id));
+  const events = log.events.map((event) => (compactedIds.has(event.id) ? { ...event, compacted: true } : event));
+
+  return appendEvent(
+    { events },
+    { id: input.id, time: input.at, participants, payload: { type: "event_summary", detail } },
+  ).log;
 }
 
 /**

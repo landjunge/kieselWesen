@@ -51,6 +51,12 @@ export interface WorldEvent {
   participants: string[];
   payload: unknown;
   resultingChangeIds: string[];
+  /**
+   * Markiert ein Ereignis als in einem Summary-Ereignis verdichtet (siehe
+   * compactEventLog in eventLog.ts). Das Originalereignis wird dabei nie
+   * gelöscht oder überschrieben — nur diese Markierung wird gesetzt.
+   */
+  compacted?: boolean;
 }
 
 export interface InnerModelState {
