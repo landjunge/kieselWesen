@@ -11,7 +11,12 @@ on:
 
 jobs:
   build-dmg:
+    # macos-latest ist inzwischen ein Apple-Silicon-Runner (arm64). Daniels
+    # Mac ist ein Intel-Gerät (2015er MacBook) — deshalb wird hier gezielt
+    # für x86_64 gebaut (Cross-Compile), nicht für den nativen arm64-Runner.
     runs-on: macos-latest
+    env:
+      TAURI_TARGET: x86_64-apple-darwin
     permissions:
       contents: write
     steps:
@@ -21,22 +26,27 @@ jobs:
         with:
           node-version: 20
 
-      - name: Rust-Werkzeugkette installieren
+      - name: Rust-Werkzeugkette installieren (inkl. Intel-Zieltriple)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
 
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: KieselWesen.dmg bauen
+      - name: KieselWesen.dmg bauen (für Intel-Macs)
         run: npm run package:dmg
 
       - name: Auf der "aktuell"-Release-Seite veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: aktuell
-          name: KieselWesen – aktuelle Mac-App
+          name: KieselWesen – aktuelle Mac-App (Intel)
           body: |
             Automatisch gebaut aus dem neuesten Stand von `main`
             (${{ github.sha }}). Diese Datei wird bei jeder Änderung
             ersetzt — hier ist immer die neueste Version.
-          files: src-tauri/target/release/bundle/dmg/KieselWesen.dmg
+
+            Für Intel-Macs (x86_64), z.B. ältere MacBooks vor 2020. Läuft
+            auch auf Apple-Silicon-Macs (M1/M2/...) über Rosetta.
+          files: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/KieselWesen.dmg

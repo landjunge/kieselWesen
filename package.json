@@ -12,7 +12,7 @@
     "build:app-dist": "npm run build:web && node scripts/build-app-dist.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "tauri build ${TAURI_TARGET:+--target $TAURI_TARGET}",
     "package:dmg": "npm run tauri:build && sh scripts/make-dmg.sh"
   },
   "devDependencies": {

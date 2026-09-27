@@ -87,7 +87,11 @@ an Intel Core i5.
 The latest `KieselWesen.dmg` is built automatically whenever `main`
 changes, and always sits on the ["aktuell"](../../releases/tag/aktuell)
 release page — just download the `.dmg` there, double-click it, and
-drag the app into `Applications`.
+drag the app into `Applications`. This file is built specifically for
+Intel Macs (x86_64) — the automated build runs on an Apple Silicon
+machine at GitHub but deliberately cross-compiles for Intel, since
+that's the target hardware (see `.github/workflows/build-dmg.yml`). It
+also runs on Apple Silicon Macs, via Rosetta.
 
 ### Build it yourself (only if you need to)
 
