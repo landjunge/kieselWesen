@@ -586,7 +586,7 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     const { page } = await freshPage();
     await page.click("#tab-suggestions");
     const resultText = await page.locator("#suggestions-result").textContent();
-    expect(resultText).toContain("Noch kein Vorschlag angefragt");
+    expect(resultText).toContain("Noch keinen Rat eingeholt");
     await page.context().close();
   });
 
@@ -662,6 +662,64 @@ describe("E2E — LLM-Vorschläge: nie automatisches Wissen, nur nach Bestätigu
     expect(learnerText).toContain("Noch kein gelernter Übergang");
     await page.context().close();
   });
+
+  it("eine Antwort ohne bekannten Ort wird verworfen, nicht als bestätigbarer Rat abgelegt", async () => {
+    const { page } = await freshPage();
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      await route.fulfill({ json: { response: "das ist mir nicht klar" } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-notice")?.textContent?.includes("verworfen") ?? false,
+    );
+
+    const resultText = await page.locator("#suggestions-result").textContent();
+    expect(resultText).toContain("Noch keinen Rat eingeholt");
+    await page.context().close();
+  });
+
+  it("ein fehlgeschlagener neuer Rat löscht nicht die bisherige Liste bestätigter/verworfener Ratschläge", async () => {
+    const { page } = await freshPage();
+    await page.route("http://localhost:11434/api/tags", async (route) => {
+      await route.fulfill({ json: { models: [{ name: "llama3.2:3b" }] } });
+    });
+    await page.route("http://localhost:11434/api/generate", async (route) => {
+      await route.fulfill({ json: { response: "cat" } });
+    });
+
+    await page.click(".plant");
+    await page.waitForTimeout(80);
+    await page.click("#tab-suggestions");
+    await page.click("#llm-refresh-models");
+    await page.waitForFunction(() => document.querySelector("#llm-model")?.textContent?.includes("llama3.2:3b") ?? false);
+    await page.selectOption("#llm-model", "llama3.2:3b");
+    await page.click("#llm-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-result")?.textContent?.includes("pending") ?? false,
+    );
+
+    // Cloud-Anfrage ohne Anbieter/Schlüssel auslösen — das ist ein Fehlerfall,
+    // die bestehende Liste muss trotzdem sichtbar bleiben.
+    await page.click("#cloud-suggest");
+    await page.waitForFunction(
+      () => document.querySelector("#suggestions-notice")?.textContent?.includes("Anbieter") ?? false,
+    );
+
+    const resultText = await page.locator("#suggestions-result").textContent();
+    expect(resultText).toContain("plant");
+    expect(resultText).toContain("pending");
+    await page.context().close();
+  });
 });
 
 describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle (Anbieter/Modell aus echter Liste, kein Raten)", () => {
@@ -678,7 +736,7 @@ describe("E2E — großes Cloud-Modell als zweite, getrennte Vorschlagsquelle (A
     await page.click("#tab-suggestions");
     await page.click("#cloud-suggest");
     await page.waitForFunction(
-      () => document.querySelector("#suggestions-result")?.textContent?.includes("Anbieter") ?? false,
+      () => document.querySelector("#suggestions-notice")?.textContent?.includes("Anbieter") ?? false,
     );
 
     expect(requestSent).toBe(false);
