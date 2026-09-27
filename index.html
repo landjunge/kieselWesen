@@ -9,7 +9,7 @@
 <body>
   <header class="appbar">
     <div class="brand"><span class="brand-mark" aria-hidden="true">◆</span><div><strong>KieselWesen</strong><small>Beobachtungsraum</small></div></div>
-    <span class="prototype">UI-Entwurf · keine Simulation</span>
+    <span class="prototype">Läuft nur auf diesem Gerät</span>
   </header>
   <main class="workspace">
     <section class="panel world-panel" aria-labelledby="world-title">
@@ -34,7 +34,7 @@
       <div class="detail"><span class="eyebrow">AKTUELLES EREIGNIS</span><p id="current-event">Noch kein Ereignis.</p></div>
       <div class="state-list" id="state-list" aria-live="polite"><span class="eyebrow">ZUSTAND</span><p>Noch keine Zustandsdaten.</p></div>
       <div class="rest-controls" role="group" aria-label="Ruhephase-Steuerung"><button type="button" id="rest-toggle">Ruhephase betreten</button><button type="button" id="rest-step" disabled>Ruheschritt</button></div>
-      <div class="middle-note">Raum und Beobachtung sind bereit. Der Simulationskern wird separat angeschlossen.</div>
+      <div class="middle-note">Klicke ein Objekt im Zimmer an. Kiesel merkt sich das und lernt daraus.</div>
     </section>
     <section class="panel inside-panel" aria-labelledby="inside-title">
       <div class="panel-header"><div><span class="eyebrow">INNENLEBEN</span><h2 id="inside-title">Knoten & Straßen</h2></div></div>
@@ -64,29 +64,30 @@
         <div id="run-tools-result" aria-live="polite"><p>Noch kein Snapshot angelegt.</p></div>
       </div>
       <div class="tab-panel learner-panel" id="view-learner" role="tabpanel" aria-labelledby="tab-learner" hidden>
-        <p class="learner-intro">Ein winziges, eigenes Modell — kein fertiges/externes LLM — lernt ausschließlich aus den echten Berührungen in diesem Lauf: welcher nächste Knoten nach dem zuletzt berührten am wahrscheinlichsten folgt. Reine gelernte Wahrscheinlichkeit aus bisherigen Übergängen, keine erfundene Bedeutung.</p>
+        <p class="learner-intro">Das ist Kiesels eigenes Gedächtnis — kein fremdes LLM. Es merkt sich, was du berührt hast, und sagt dir, was danach oft folgt. Nur echte Erfahrung, nichts erfunden.</p>
         <div id="learner-result" aria-live="polite"><p>Noch keine Übergänge gelernt.</p></div>
       </div>
       <div class="tab-panel suggestions-panel" id="view-suggestions" role="tabpanel" aria-labelledby="tab-suggestions" hidden>
-        <p class="suggestions-intro">Ein austauschbares LLM kann einen Vorschlag machen, was auf den zuletzt berührten Knoten folgen könnte — entweder ein lokales, kleines Modell (über Ollama, komplett offline) oder, für allgemeines Weltwissen, ein großes Modell über die Cloud (eigener API-Schlüssel nötig, verlässt dieses Gerät nur direkt an den gewählten Anbieter). Die App fragt den jeweiligen Anbieter selbst, welche Modelle verfügbar sind — kein Modellname zum Raten/Eintippen, nur eine Liste zum Auswählen, ohne Vorauswahl. Ein Vorschlag verändert Kiesels echtes Wissen in beiden Fällen nie von selbst — erst nach Bestätigung fließt er als echter Lernschritt ein, genau wie eine selbst beobachtete Erfahrung. Auch ein großes Modell kann sich irren; deshalb entscheidest du.</p>
-        <div class="suggestions-controls" role="group" aria-label="Lokales LLM anfragen">
-          <button type="button" id="llm-refresh-models">Installierte Modelle laden</button>
-          <label>Lokales Modell: <select id="llm-model" aria-label="Lokales Modell auswählen"><option value="">— Modelle laden —</option></select></label>
-          <button type="button" id="llm-suggest">Vorschlag anfragen (lokal)</button>
+        <p class="suggestions-intro">Hier kann Kiesel ein LLM (ein Sprach-Programm) um Rat fragen — entweder eins, das nur auf diesem Gerät läuft (Ollama), oder eins über das Internet (eigener Schlüssel nötig). Ein Rat wird nie automatisch übernommen. Erst wenn du auf "Bestätigen" klickst, merkt Kiesel sich das wirklich.</p>
+        <div class="suggestions-controls" role="group" aria-label="LLM auf diesem Gerät fragen">
+          <button type="button" id="llm-refresh-models">Verfügbare LLMs anzeigen</button>
+          <label>LLM: <select id="llm-model" aria-label="LLM auf diesem Gerät auswählen"><option value="">— erst anzeigen lassen —</option></select></label>
+          <button type="button" id="llm-suggest">Um Rat fragen (dieses Gerät)</button>
         </div>
-        <div class="suggestions-controls" role="group" aria-label="Großes Cloud-Modell anfragen">
-          <label>Anbieter: <select id="cloud-provider" aria-label="Cloud-Anbieter auswählen">
+        <div class="suggestions-controls" role="group" aria-label="LLM über das Internet fragen">
+          <label>Anbieter: <select id="cloud-provider" aria-label="Anbieter auswählen">
             <option value="">— Anbieter wählen —</option>
             <option value="anthropic">Anthropic</option>
             <option value="openai-compatible">OpenAI-kompatibel (z.B. DeepSeek)</option>
           </select></label>
-          <label id="cloud-base-url-field" hidden>Adresse: <input type="text" id="cloud-base-url" aria-label="API-Adresse des Anbieters" placeholder="https://api.deepseek.com"></label>
-          <label>API-Schlüssel: <input type="password" id="cloud-api-key" aria-label="API-Schlüssel des Cloud-Anbieters" placeholder="Schlüssel einfügen" autocomplete="off"></label>
-          <button type="button" id="cloud-refresh-models">Verfügbare Modelle laden</button>
-          <label>Cloud-Modell: <select id="cloud-model" aria-label="Cloud-Modell auswählen"><option value="">— Modelle laden —</option></select></label>
-          <button type="button" id="cloud-suggest">Vorschlag anfragen (Cloud)</button>
+          <label id="cloud-base-url-field" hidden>Adresse: <input type="text" id="cloud-base-url" aria-label="Adresse des Anbieters" placeholder="https://api.deepseek.com"></label>
+          <label>Schlüssel: <input type="password" id="cloud-api-key" aria-label="Schlüssel des Anbieters" placeholder="Schlüssel einfügen" autocomplete="off"></label>
+          <button type="button" id="cloud-refresh-models">Verfügbare LLMs anzeigen</button>
+          <label>LLM: <select id="cloud-model" aria-label="LLM über das Internet auswählen"><option value="">— erst anzeigen lassen —</option></select></label>
+          <button type="button" id="cloud-suggest">Um Rat fragen (Internet)</button>
         </div>
-        <div id="suggestions-result" aria-live="polite"><p>Noch kein Vorschlag angefragt.</p></div>
+        <div id="suggestions-notice" aria-live="polite"></div>
+        <div id="suggestions-result" aria-live="polite"><p>Noch keinen Rat eingeholt.</p></div>
       </div>
       <div class="inside-footer">Distanz, Nutzung und Aktivierung bleiben getrennte Werte.</div>
     </section>

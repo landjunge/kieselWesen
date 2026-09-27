@@ -268,6 +268,23 @@ const cloudRefreshModelsButton = document.getElementById("cloud-refresh-models")
 const cloudModelSelect = document.getElementById("cloud-model");
 const cloudSuggestButton = document.getElementById("cloud-suggest");
 const suggestionsResult = document.getElementById("suggestions-result");
+const suggestionsNotice = document.getElementById("suggestions-notice");
+
+/**
+ * Kurze Hinweise/Fehler stehen in einem eigenen Bereich, getrennt von der
+ * Liste der bisherigen Vorschläge — ein Hinweis darf die Liste nie
+ * verdecken oder löschen.
+ */
+function showNotice(text) {
+  if (!suggestionsNotice) return;
+  const message = document.createElement("p");
+  message.textContent = text;
+  suggestionsNotice.replaceChildren(message);
+}
+
+function clearNotice() {
+  if (suggestionsNotice) suggestionsNotice.replaceChildren();
+}
 
 function fillModelSelect(select, models) {
   if (!select) return;
@@ -306,14 +323,12 @@ cloudApiKeyInput?.addEventListener("change", () => {
 });
 
 llmRefreshModelsButton?.addEventListener("click", async () => {
+  showNotice("Lade LLMs auf diesem Gerät...");
   try {
     fillModelSelect(llmModelSelect, await listOllamaModels());
+    clearNotice();
   } catch (error) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = `Installierte Modelle konnten nicht geladen werden: ${error.message}`;
-      suggestionsResult.replaceChildren(message);
-    }
+    showNotice(`Konnte LLMs nicht anzeigen: ${error.message}`);
   }
 });
 
@@ -321,25 +336,19 @@ cloudRefreshModelsButton?.addEventListener("click", async () => {
   const provider = cloudProviderSelect?.value;
   const apiKey = cloudApiKeyInput?.value ?? "";
   if (!provider || !apiKey) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = "Bitte zuerst Anbieter und API-Schlüssel angeben.";
-      suggestionsResult.replaceChildren(message);
-    }
+    showNotice("Bitte zuerst Anbieter und Schlüssel angeben.");
     return;
   }
+  showNotice("Lade verfügbare LLMs...");
   try {
     const models =
       provider === "anthropic"
         ? await listAnthropicModels(apiKey)
         : await listOpenAiCompatibleModels(cloudBaseUrlInput.value.trim(), apiKey);
     fillModelSelect(cloudModelSelect, models);
+    clearNotice();
   } catch (error) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = `Verfügbare Modelle konnten nicht geladen werden: ${error.message}`;
-      suggestionsResult.replaceChildren(message);
-    }
+    showNotice(`Konnte LLMs nicht anzeigen: ${error.message}`);
   }
 });
 
@@ -350,37 +359,41 @@ cloudRefreshModelsButton?.addEventListener("click", async () => {
  */
 async function requestSuggestionFrom(client, modelName) {
   if (!lastTouchedNodeId) return;
-  const knownNodeIds = [...run.model.nodes.keys()];
+  // Alle bekannten Orte im Zimmer, nicht nur die bereits berührten — ein
+  // sinnvoller Vorschlag kann auch ein noch nicht berührter Ort sein
+  // (z.B. "danach vielleicht die Katze").
+  const knownNodeIds = [...world.objects.keys()];
   const prompt =
-    `Bekannte Knoten: ${knownNodeIds.join(", ")}. ` +
-    `Zuletzt berührter Knoten: "${lastTouchedNodeId}". ` +
-    `Welcher bekannte Knoten folgt darauf am wahrscheinlichsten? Antworte nur mit der Knoten-ID.`;
+    `Bekannte Orte: ${knownNodeIds.join(", ")}. ` +
+    `Zuletzt berührter Ort: "${lastTouchedNodeId}". ` +
+    `Welcher bekannte Ort folgt darauf am wahrscheinlichsten? Antworte nur mit dem Namen.`;
 
-  if (suggestionsResult) {
-    const pending = document.createElement("p");
-    pending.textContent = `Frage Modell "${modelName}"...`;
-    suggestionsResult.append(pending);
-  }
+  showNotice(`Frage "${modelName}"...`);
 
   try {
     const text = await client.suggest(prompt);
     const matchedToId = knownNodeIds.find((id) => text.trim().toLowerCase().includes(id.toLowerCase()));
+    if (!matchedToId) {
+      // Kein bekannter Ort in der Antwort erkannt — wird bewusst nicht als
+      // bestätigbarer Vorschlag abgelegt, damit Kiesel nie einen erfundenen
+      // Ort lernen kann.
+      showNotice(`"${modelName}" hat keinen bekannten Ort genannt. Antwort verworfen: "${text.trim()}"`);
+      renderSuggestionsPanel();
+      return;
+    }
     suggestionCounter += 1;
     run.suggestions = addSuggestion(getSuggestions(run), {
       id: `sugg${suggestionCounter}`,
       createdAt: Date.now(),
       fromId: lastTouchedNodeId,
-      toId: matchedToId ?? text.trim(),
+      toId: matchedToId,
       text,
       modelName,
     });
     saveRunToStorage(run);
+    clearNotice();
   } catch (error) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = `Anfrage an "${modelName}" fehlgeschlagen: ${error.message}`;
-      suggestionsResult.append(message);
-    }
+    showNotice(`Anfrage an "${modelName}" fehlgeschlagen: ${error.message}`);
   }
   renderSuggestionsPanel();
 }
@@ -388,11 +401,7 @@ async function requestSuggestionFrom(client, modelName) {
 llmSuggestButton?.addEventListener("click", () => {
   const modelName = llmModelSelect?.value;
   if (!modelName) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = "Bitte zuerst ein lokales Modell aus der Liste auswählen.";
-      suggestionsResult.replaceChildren(message);
-    }
+    showNotice("Bitte zuerst ein LLM aus der Liste auswählen.");
     return;
   }
   requestSuggestionFrom(createOllamaClient(modelName), modelName);
@@ -403,11 +412,7 @@ cloudSuggestButton?.addEventListener("click", () => {
   const apiKey = cloudApiKeyInput?.value ?? "";
   const modelName = cloudModelSelect?.value;
   if (!provider || !apiKey || !modelName) {
-    if (suggestionsResult) {
-      const message = document.createElement("p");
-      message.textContent = "Bitte Anbieter, API-Schlüssel und Modell auswählen (Modelle zuerst laden).";
-      suggestionsResult.replaceChildren(message);
-    }
+    showNotice("Bitte Anbieter, Schlüssel und LLM auswählen (LLMs zuerst anzeigen lassen).");
     return;
   }
   const client =
@@ -442,7 +447,7 @@ function renderSuggestionsPanel() {
   const items = getSuggestions(run).items;
   if (items.length === 0) {
     const message = document.createElement("p");
-    message.textContent = "Noch kein Vorschlag angefragt.";
+    message.textContent = "Noch keinen Rat eingeholt.";
     suggestionsResult.append(message);
     return;
   }
